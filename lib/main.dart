@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hlvm_mobileapp/features/auth/view/authentication_screen.dart';
 import 'package:hlvm_mobileapp/features/finance_account/view/view.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
 
@@ -16,7 +17,11 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
-      home: const HomePage(),
+      initialRoute: '/login',
+      routes: {
+        '/login': (context) => const LoginScreen(),
+        '/home': (context) => const HomePage(),
+      },
     );
   }
 }
