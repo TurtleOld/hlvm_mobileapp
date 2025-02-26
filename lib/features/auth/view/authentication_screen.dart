@@ -23,8 +23,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final username = _usernameController.text.trim();
     final password = _passwordController.text.trim();
-    print(username);
-    print(password);
 
     if (username.isEmpty || password.isEmpty) {
       setState(() {
@@ -34,7 +32,6 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     final result = await _authService.login(username, password);
-    print(result);
     setState(() {
       _isLoading = false;
       if (!result['success']) {

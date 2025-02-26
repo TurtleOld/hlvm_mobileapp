@@ -3,6 +3,7 @@ import 'package:hlvm_mobileapp/features/auth/view/authentication_screen.dart';
 import 'package:hlvm_mobileapp/features/finance_account/view/view.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
 
+
 void main() {
   runApp(const MyApp());
 }
@@ -21,6 +22,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomePage(),
+        '/uploadFile': (context) => const FileReaderScreen(),
       },
     );
   }
