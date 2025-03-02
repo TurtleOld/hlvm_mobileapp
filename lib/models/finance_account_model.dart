@@ -3,7 +3,8 @@ class FinanceAccount {
       {required this.id,
       required this.name,
       required this.balance,
-      required this.currency});
+      required this.currency,
+      required String accountName});
 
   final int id;
   final String name;
@@ -15,6 +16,7 @@ class FinanceAccount {
         id: json['id'],
         name: json['name_account'],
         balance: json['balance'],
-        currency: json['currency']);
+        currency: json['currency'],
+        accountName: '');
   }
 }

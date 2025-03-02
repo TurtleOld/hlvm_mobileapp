@@ -1,14 +1,10 @@
 import 'dart:convert';
-import 'dart:developer';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
-import 'package:hlvm_mobileapp/services/authentication.dart';
-import 'package:pretty_json/pretty_json.dart';
+import 'package:hlvm_mobileapp/services/api.dart';
 
 class FileReaderScreen extends StatefulWidget {
   const FileReaderScreen({super.key});
@@ -20,13 +16,9 @@ class FileReaderScreen extends StatefulWidget {
 class _FileReaderScreenState extends State<FileReaderScreen> {
   dynamic _jsonData;
   String? _errorMessage;
-  final Dio _dio = Dio();
-  final String _baseUrl = 'https://hlvm.pavlovteam.ru/api';
-  final AuthService _authService = AuthService();
-  late String accessToken;
+  final ApiService _apiService = ApiService();
 
   Future<void> _pickAndReadFile() async {
-    final accessToken = await _authService.getAccessToken();
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['json'],
@@ -50,8 +42,6 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
       final prepareData = PrepareData();
 
       final data = await prepareData.prepareData(content);
-      print(jsonEncode(data));
-      print(accessToken);
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) {
@@ -76,14 +66,10 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
         },
       );
       if (confirmed == true) {
-        final response = await _dio.post('$_baseUrl/receipts/create-receipt/',
-            data: jsonEncode(data),
-            options:
-                Options(headers: {'Authorization': 'Bearer $accessToken'}));
+        await _apiService.createReceipt(data);
 
-        setState(() async {
+        setState(() {
           _jsonData = content;
-          await prepareData.prepareData(content);
           _errorMessage = null;
         });
       } else {
@@ -133,10 +119,6 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
           children: [
             ElevatedButton(
                 onPressed: _pickAndReadFile, child: const Text('Выбрать файл')),
-            const SizedBox(height: 16),
-            Expanded(
-              child: _buildContent(),
-            )
           ],
         ),
       ),
