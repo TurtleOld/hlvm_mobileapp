@@ -52,11 +52,9 @@ class ApiService {
     }
   }
 
-  Future<Map<String, dynamic>> getSeller() async {
+  Future<Map<String, dynamic>> getSeller(int sellerId) async {
     try {
       final accessToken = await _authService.getAccessToken();
-      final receipt = await listReceipt();
-      final sellerId = receipt[0]['seller'];
       final response = await _dio.get('$_baseUrl/receipts/seller/$sellerId',
           options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
       if (response.statusCode == 200) {

@@ -77,32 +77,7 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
       }
     }
   }
-
-  Widget _buildContent() {
-    if (_errorMessage != null) {
-      return Center(
-        child: Text(
-          _errorMessage!,
-          style: const TextStyle(color: Colors.red),
-        ),
-      );
-    }
-
-    if (_jsonData == null) {
-      return const Center(
-        child: Text("Нажмите кнопку, чтобы выбрать JSON-файл"),
-      );
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Text(
-        JsonEncoder.withIndent('  ').convert(_jsonData),
-        style: const TextStyle(fontSize: 14, fontFamily: 'monospace'),
-      ),
-    );
-  }
-
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
