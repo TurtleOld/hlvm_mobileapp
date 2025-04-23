@@ -153,3 +153,4 @@ app.*.symbols
 
 *.cxx
 app/.cxx/*
+.env
