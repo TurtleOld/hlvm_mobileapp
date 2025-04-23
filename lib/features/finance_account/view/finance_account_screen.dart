@@ -46,6 +46,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen> {
   Future<void> _fetchFinanceAccount() async {
     try {
       final accounts = await _apiService.fetchFinanceAccount();
+      if (!mounted) return;
       setState(() {
         _financeAccounts = accounts;
         _isLoading = false;

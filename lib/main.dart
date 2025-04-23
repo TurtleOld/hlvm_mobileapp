@@ -1,15 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:hlvm_mobileapp/features/auth/view/authentication_screen.dart';
 import 'package:hlvm_mobileapp/features/finance_account/view/view.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
+import 'package:hlvm_mobileapp/services/authentication.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final bool isLoggedIn = await checkLoggedIn();
+  await dotenv.load(fileName: ".env");
+  runApp(MyApp(
+    isLoggedIn: isLoggedIn,
+  ));
+}
 
-void main() {
-  runApp(const MyApp());
+Future<bool> checkLoggedIn() async {
+  final SharedPreferences prefs = await SharedPreferences.getInstance();
+  return prefs.getBool('isLoggedIn') ?? false;
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool isLoggedIn;
+
+  const MyApp({super.key, required this.isLoggedIn});
 
   @override
   Widget build(BuildContext context) {
@@ -18,11 +32,13 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
+      home: isLoggedIn ? const HomePage() : const LoginScreen(),
       initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomePage(),
         '/uploadFile': (context) => const FileReaderScreen(),
+        '/image_capture': (context) => const ImageCaptureScreen(),
       },
     );
   }
@@ -45,10 +61,15 @@ class _HomePageState extends State<HomePage> {
   ];
 
   // Обработчик нажатия на элемент BottomNavigationBar
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+  void _onItemTapped(int index) async {
+    if (index == 2) {
+      await AuthService().logout(context);
+      Navigator.pushReplacementNamed(context, '/login');
+    } else {
+      setState(() {
+        _selectedIndex = index;
+      });
+    }
   }
 
   @override
@@ -65,6 +86,10 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.receipt),
             label: 'Чеки',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.logout),
+            label: 'Выход',
+          )
         ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,

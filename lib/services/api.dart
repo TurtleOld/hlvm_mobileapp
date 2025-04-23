@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -61,6 +62,27 @@ class ApiService {
         return response.data;
       } else {
         throw Exception("Failed to load receipts");
+      }
+    } catch (e) {
+      throw Exception("Error: $e");
+    }
+  }
+
+  Future<String> getDataUrl(String dataUrl) async {
+    try {
+      final accessToken = await _authService.getAccessToken();
+      final requestBody = {
+        'data_url': dataUrl,
+      };
+      final response = await _dio.post(
+        '$_baseUrl/receipts/image/',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+        data: requestBody,
+      );
+      if (response.statusCode == 200) {
+        return response.data['data_url'];
+      } else {
+        throw Exception("Failed to load data image");
       }
     } catch (e) {
       throw Exception("Error: $e");

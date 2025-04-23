@@ -90,7 +90,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop(); // Закрыть диалог
+                Navigator.of(context).pop();
               },
               child: Text(
                 "Закрыть",
@@ -116,8 +116,7 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
                   item['product_name'],
                   style: GoogleFonts.montserrat(fontSize: 11),
                   overflow: TextOverflow.ellipsis,
-                  // Добавляем многоточие при переполнении
-                  maxLines: 1, // Ограничиваем количество строк до одной
+                  maxLines: 1,
                 ),
               ),
               Text(
@@ -147,6 +146,16 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
             },
             icon: Icon(
               Icons.upload_file_rounded,
+              color: Colors.white,
+            ),
+          ),
+          IconButton(
+            onPressed: () {
+              Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const ImageCaptureScreen()));
+            },
+            icon: Icon(
+              Icons.photo_camera_back,
               color: Colors.white,
             ),
           ),

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
 
@@ -14,9 +15,9 @@ class AuthService {
       });
 
       if (response.statusCode == 200) {
+        await saveLoginStatus(true);
         final accessToken = response.data['access'];
         final refreshToken = response.data['refresh'];
-
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('access_token', accessToken);
         await prefs.setString('refresh_token', refreshToken);
@@ -27,6 +28,16 @@ class AuthService {
     } catch (e) {
       return {'success': false, 'message': 'Ошибка $e'};
     }
+  }
+
+  Future<void> saveLoginStatus(bool isLoggedIn) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isLoggedIn', isLoggedIn);
+  }
+
+  Future<bool> isLoggedIn() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('isLoggedIn') ?? false;
   }
 
   Future<void> refreshToken() async {
@@ -52,9 +63,13 @@ class AuthService {
     return prefs.getString('access_token');
   }
 
-  Future<void> logout() async {
+  Future<void> logout(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
+    await prefs.remove('isLoggedIn');
+    await saveLoginStatus(false);
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Вы успешно вышли из аккаунта')));
   }
 }
