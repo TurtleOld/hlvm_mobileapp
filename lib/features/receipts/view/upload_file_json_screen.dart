@@ -20,8 +20,8 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
 
   Future<void> _pickAndReadFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
+      type: FileType.any,
+      //allowedExtensions: ['json'],
     );
     if (result != null) {
       final file = result.files.first;
@@ -77,7 +77,7 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
       }
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

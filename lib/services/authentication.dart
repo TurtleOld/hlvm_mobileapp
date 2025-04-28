@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
 
 class AuthService {
   final Dio _dio = Dio();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   final String _baseUrl = 'https://hlvm.pavlovteam.ru/api';
 
@@ -15,12 +17,11 @@ class AuthService {
       });
 
       if (response.statusCode == 200) {
-        await saveLoginStatus(true);
         final accessToken = response.data['access'];
         final refreshToken = response.data['refresh'];
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('access_token', accessToken);
-        await prefs.setString('refresh_token', refreshToken);
+        await _secureStorage.write(key: 'access_token', value: accessToken);
+        await _secureStorage.write(key: 'refresh_token', value: refreshToken);
+        await _secureStorage.write(key: 'isLoggedIn', value: 'true');
         return {'success': true, 'message': 'Авторизация пройдена'};
       } else {
         return {'success': false, 'message': 'Ошибка авторизации'};
@@ -36,40 +37,43 @@ class AuthService {
   }
 
   Future<bool> isLoggedIn() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('isLoggedIn') ?? false;
+    final isLoggedIn = await _secureStorage.read(key: 'isLoggedIn');
+    final accessToken = await _secureStorage.read(key: 'access_token');
+    final refreshToken = await _secureStorage.read(key: 'refresh_token');
+    return isLoggedIn == 'true' && accessToken != null && refreshToken != null;
   }
 
   Future<void> refreshToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    final refreshToken = prefs.getString('refresh_token');
+    final refreshToken = await _secureStorage.read(key: 'refresh_token');
+
     if (refreshToken == null) {
       throw Exception("Refresh token is missing");
     }
+
     try {
       final response = await _dio.post(
         "$_baseUrl/auth/token/refresh/",
         data: {"refresh": refreshToken},
       );
+
       final newAccessToken = response.data['access'];
-      await prefs.setString('access_token', newAccessToken);
+      await _secureStorage.write(key: 'access_token', value: newAccessToken);
     } catch (e) {
       throw Exception("Failed to refresh token: $e");
     }
   }
 
   Future<String?> getAccessToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('access_token');
+    return await _secureStorage.read(key: 'access_token');
   }
 
   Future<void> logout(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('access_token');
-    await prefs.remove('refresh_token');
-    await prefs.remove('isLoggedIn');
-    await saveLoginStatus(false);
+    await _secureStorage.delete(key: 'access_token');
+    await _secureStorage.delete(key: 'refresh_token');
+    await _secureStorage.delete(key: 'isLoggedIn');
+
     ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Вы успешно вышли из аккаунта')));
+      const SnackBar(content: Text('Вы успешно вышли из аккаунта')),
+    );
   }
 }

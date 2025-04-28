@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:hlvm_mobileapp/services/api.dart';
+import 'package:jwt_decoder/jwt_decoder.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({super.key});
@@ -15,10 +17,12 @@ class ImageCaptureScreen extends StatefulWidget {
 
 class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   final ApiService _apiService = ApiService();
-  String _responseDataUrl = '';
+  final String _responseDataUrl = '';
   XFile? _imageFile;
   String? _dataUrl;
   Map<String, dynamic>? _jsonData;
+  String? _stringJson;
+
   final ImagePicker _picker = ImagePicker();
 
   Future<void> _captureImage(ImageSource source) async {
@@ -29,15 +33,21 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           _imageFile = image;
         });
 
-        final String dataUrl = await getImageDataUrl(image.path, 'jpeg');
+        final String dataUrl = await getImageDataUrl(image.path, 'jpg');
         setState(() {
           _dataUrl = dataUrl;
         });
 
-        final jsonData = await getJsonReceipt(dataUrl);
+        final Map<String, dynamic> jsonData = await getJsonReceipt(dataUrl);
+        String prettyJson = JsonEncoder.withIndent('  ').convert(jsonData);
         setState(() {
           _jsonData = jsonData;
+          _stringJson = prettyJson;
         });
+        final createReceipt = await _apiService.createReceipt(jsonData);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(createReceipt)),
+        );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -50,20 +60,23 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Image Capture and Process'),
+        title: const Text('Обработка фото чека'),
       ),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (_imageFile == null)
-              const Text('Нет изображений')
-            else
-              Image.file(
-                File(_imageFile!.path),
-                height: 200,
-                width: 200,
-                fit: BoxFit.cover,
+            if (_stringJson != null)
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Text(
+                      _stringJson!,
+                      style: const TextStyle(fontSize: 14, color: Colors.black),
+                    ),
+                  ),
+                ),
               ),
             const SizedBox(height: 20),
             if (_dataUrl != null)
@@ -107,12 +120,16 @@ Future<String> getImageDataUrl(String imagePath, String imageFormat) async {
     // Формирование строки Data URL
     return "data:image/$imageFormat;base64,$base64Image";
   } catch (e) {
-    print(e.toString());
     rethrow;
   }
 }
 
 Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
+  final prefs = await SharedPreferences.getInstance();
+  final accessToken = prefs.getString('access_token');
+  final selectedAccount = prefs.getInt('selectedAccountId');
+  final Map<String, dynamic> decodedToken = JwtDecoder.decode(accessToken!);
+  final int userId = decodedToken['user_id'];
   final dio = Dio();
   final payload = {
     "messages": [
@@ -126,7 +143,7 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
         "content": [
           {
             "text":
-                "Распознай полный текст чека. Выдели оттуда продавца, адрес, номер чека, цену каждого товара, количество каждого товара, итоговую цену с учётом скидки если она есть, дату, НДС. Запиши это всё в Json формат, чтобы можно было сохранить результать в БД. seller - продавец, address - адрес, inn - ИНН, receipt_number - в чеке обозначайте как ФД если на изображении нет такого обозначения записать значение 0 в ином случае записать в значение в виде числа, date - дата, items - товары, discount - скидка, total_price - итоговая цена с учётом скидки, vat_20_sum - сумма НДС 20% , vat_10_sum - сумма НДС 10%, если на чеке есть слово ПРИХОД в operation_type ставить 1 тип int, если РАСХОД ставить в operation_type 2 тип int",
+                "Распознай текст чека и только создай JSON где значения должны быть число - тип int или float, слова - тип строка $userId и $selectedAccount - type int: {'seller': {'name_seller': 'имя продавца', 'retail_place_address': 'адрес', 'user': $userId}, 'number_receipt': 'ФД или 0' type int, 'receipt_date': записать в формате ISO 8601 YYYY-MM-DDTHH:MM:SS на чеках может быть в форматах DD.MM.YYYY HH:MM, 'total_sum': итоговая сумма, 'nds20': сумма НДС 20%, 'nds10': сумма НДС 10%, 'operation_type': 1 для ПРИХОД, 2 для РАСХОД, 'product': [{'product_name': 'товар', 'quantity': 'количество', 'amount': 'цена', 'price': 'стоимость за единицу', 'nds_type': 1 если НДС 20%, 2 если НДС 10% type int, 'nds_sum': рассчитанная сумма НДС - type int}], 'user': $userId - type int, 'finance_account': $selectedAccount - type int}. Если данных нет, используй 0 для int или '' для string.",
             "type": "text"
           },
           {
@@ -136,10 +153,10 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
         ]
       }
     ],
-    "model": "openai/gpt-4o",
+    "model": "openai/gpt-4.1",
     "max_tokens": 2048,
-    "temperature": 0.7,
-    "top_p": 0.5
+    "temperature": 1,
+    "top_p": 1
   };
   final githubToken = dotenv.env['GITHUB_TOKEN'];
   try {
@@ -158,7 +175,6 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
         rawResponse.replaceAll('```json', '').replaceAll('```', '').trim();
     return jsonDecode(cleanedResponse);
   } catch (e) {
-    print('Error: $e');
     return {'Error': e};
   }
 }

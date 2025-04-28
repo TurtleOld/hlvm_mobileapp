@@ -4,7 +4,9 @@ allprojects {
         mavenCentral()
     }
 }
-
+buildscript {
+    ext.kotlin_version = '2.1.20'
+}
 rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"

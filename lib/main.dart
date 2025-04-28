@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hlvm_mobileapp/features/auth/view/authentication_screen.dart';
 import 'package:hlvm_mobileapp/features/finance_account/view/view.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,15 +16,23 @@ void main() async {
 }
 
 Future<bool> checkLoggedIn() async {
-  final SharedPreferences prefs = await SharedPreferences.getInstance();
-  return prefs.getBool('isLoggedIn') ?? false;
+  final storage = const FlutterSecureStorage();
+  final isLoggedIn = await storage.read(key: 'isLoggedIn');
+  final accessToken = await storage.read(key: 'access_token');
+  final refreshToken = await storage.read(key: 'refresh_token');
+  return isLoggedIn == 'true' && accessToken != null && refreshToken != null;
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final bool isLoggedIn;
 
   const MyApp({super.key, required this.isLoggedIn});
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -32,8 +40,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         useMaterial3: true,
       ),
-      home: isLoggedIn ? const HomePage() : const LoginScreen(),
-      initialRoute: '/login',
+      home: widget.isLoggedIn ? const HomePage() : const LoginScreen(),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomePage(),

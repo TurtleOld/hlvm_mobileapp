@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:dio/dio.dart';
 import 'package:hlvm_mobileapp/models/finance_account_model.dart';
 
@@ -68,34 +66,12 @@ class ApiService {
     }
   }
 
-  Future<String> getDataUrl(String dataUrl) async {
-    try {
-      final accessToken = await _authService.getAccessToken();
-      final requestBody = {
-        'data_url': dataUrl,
-      };
-      final response = await _dio.post(
-        '$_baseUrl/receipts/image/',
-        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
-        data: requestBody,
-      );
-      if (response.statusCode == 200) {
-        return response.data['data_url'];
-      } else {
-        throw Exception("Failed to load data image");
-      }
-    } catch (e) {
-      throw Exception("Error: $e");
-    }
-  }
-
-  Future<String> createReceipt(Map<String, dynamic> data) async {
+  Future<String> createReceipt(Map<String, dynamic> jsonData) async {
     try {
       final accessToken = await _authService.getAccessToken();
       final response = await _dio.post('$_baseUrl/receipts/create-receipt/',
-          data: jsonEncode(data),
+          data: jsonData,
           options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
-
       if (response.statusCode == 200) {
         return 'Чек успешно добавлен!';
       } else {
