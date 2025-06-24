@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:hlvm_mobileapp/services/api.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({super.key});
