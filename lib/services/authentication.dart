@@ -31,11 +31,6 @@ class AuthService {
     }
   }
 
-  Future<void> saveLoginStatus(bool isLoggedIn) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isLoggedIn', isLoggedIn);
-  }
-
   Future<bool> isLoggedIn() async {
     final isLoggedIn = await _secureStorage.read(key: 'isLoggedIn');
     final accessToken = await _secureStorage.read(key: 'access_token');
