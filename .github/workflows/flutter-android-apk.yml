@@ -19,6 +19,9 @@ jobs:
           flutter-version: '3.32.4'
           channel: 'stable'
 
+      - name: Create .env file
+        run: echo "GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}" > .env
+
       - name: Install dependencies
         run: flutter pub get
 
