@@ -8,6 +8,9 @@ import 'package:hlvm_mobileapp/services/api.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hlvm_mobileapp/services/authentication.dart';
+import 'package:hlvm_mobileapp/features/auth/view/authentication_screen.dart';
+import 'package:hlvm_mobileapp/features/finance_account/view/finance_account_screen.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({super.key});
@@ -40,20 +43,79 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         });
 
         final Map<String, dynamic> jsonData = await getJsonReceipt(dataUrl);
+        print('Отправляемые данные:');
+        print(jsonData);
+        if (jsonData.containsKey('Error')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка: ${jsonData['Error']}')),
+          );
+          return;
+        }
         String prettyJson = JsonEncoder.withIndent('  ').convert(jsonData);
         setState(() {
           _jsonData = jsonData;
           _stringJson = prettyJson;
         });
-        final createReceipt = await _apiService.createReceipt(jsonData);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(createReceipt)),
-        );
+        try {
+          final createReceipt = await _apiService.createReceipt(jsonData);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(createReceipt)),
+          );
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                  builder: (context) => const FinanceAccountScreen()),
+            );
+          }
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка при добавлении чека: $e')),
+          );
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                  builder: (context) => const FinanceAccountScreen()),
+            );
+          }
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      if (e is DioException) {
+        final status = e.response?.statusCode;
+        final serverMsg = e.response?.data?.toString() ?? '';
+        if (status == 401) {
+          await AuthService().logout(context);
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+            );
+          }
+          return;
+        } else if (status == 400) {
+          print('Ошибка 400, ответ сервера:');
+          print(e.response?.data);
+          String detailMsg = '';
+          final data = e.response?.data;
+          if (data is Map && data['detail'] != null) {
+            detailMsg = data['detail'].toString();
+          } else if (data != null) {
+            detailMsg = data.toString();
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка запроса: $detailMsg')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка: $serverMsg')),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Неизвестная ошибка: $e')),
+        );
+      }
     }
   }
 
@@ -125,6 +187,11 @@ Future<String> getImageDataUrl(String imagePath, String imageFormat) async {
   }
 }
 
+Future<String?> getGithubToken() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getString('github_token');
+}
+
 Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
   final storage = const FlutterSecureStorage();
   final accessToken = await storage.read(key: 'access_token');
@@ -160,7 +227,7 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
     "temperature": 1,
     "top_p": 1
   };
-  final githubToken = dotenv.env['GITHUB_TOKEN'];
+  final githubToken = await getGithubToken();
   try {
     final response = await dio.post(
       'https://models.github.ai/inference/chat/completions',
@@ -177,6 +244,9 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
         rawResponse.replaceAll('```json', '').replaceAll('```', '').trim();
     return jsonDecode(cleanedResponse);
   } catch (e) {
-    return {'Error': e};
+    if (e is DioException) {
+      return {'Error': e.response?.data?.toString() ?? e.toString()};
+    }
+    return {'Error': e.toString()};
   }
 }

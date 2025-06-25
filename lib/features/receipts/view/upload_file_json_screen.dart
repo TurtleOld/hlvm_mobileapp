@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
 import 'package:hlvm_mobileapp/services/api.dart';
+import 'package:hlvm_mobileapp/features/auth/view/settings_screen.dart';
 
 class FileReaderScreen extends StatefulWidget {
   const FileReaderScreen({super.key});
@@ -66,12 +67,36 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
         },
       );
       if (confirmed == true) {
-        await _apiService.createReceipt(data);
-
-        setState(() {
-          _jsonData = content;
-          _errorMessage = null;
-        });
+        try {
+          await _apiService.createReceipt(data);
+          setState(() {
+            _jsonData = content;
+            _errorMessage = null;
+          });
+        } catch (e) {
+          final errorMsg = e.toString();
+          if (errorMsg.contains('Необходимо указать адрес сервера')) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content:
+                    const Text('Необходимо указать адрес сервера в настройках'),
+                action: SnackBarAction(
+                  label: 'Настроить',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                          builder: (context) => const SettingsScreen()),
+                    );
+                  },
+                ),
+              ),
+            );
+          } else {
+            setState(() {
+              _errorMessage = 'Ошибка: $e';
+            });
+          }
+        }
       } else {
         throw Exception("Выбор файла отменен");
       }

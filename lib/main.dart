@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hlvm_mobileapp/features/auth/view/authentication_screen.dart';
 import 'package:hlvm_mobileapp/features/finance_account/view/view.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
+import 'package:hlvm_mobileapp/features/auth/view/github_token_settings_screen.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
 
 void main() async {
@@ -65,11 +66,12 @@ class _HomePageState extends State<HomePage> {
   static const List<Widget> _pages = <Widget>[
     FinanceAccountScreen(),
     ReceiptScreen(),
+    GithubTokenSettingsScreen(),
   ];
 
   // Обработчик нажатия на элемент BottomNavigationBar
   void _onItemTapped(int index) async {
-    if (index == 2) {
+    if (index == 3) {
       await AuthService().logout(context);
       Navigator.pushReplacementNamed(context, '/login');
     } else {
@@ -88,14 +90,22 @@ class _HomePageState extends State<HomePage> {
           BottomNavigationBarItem(
             icon: Icon(Icons.credit_score),
             label: 'Счета',
+            backgroundColor: Colors.green,
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.receipt),
             label: 'Чеки',
+            backgroundColor: Colors.green,
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Настройки',
+            backgroundColor: Colors.green,
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.logout),
             label: 'Выход',
+            backgroundColor: Colors.green,
           )
         ],
         currentIndex: _selectedIndex,

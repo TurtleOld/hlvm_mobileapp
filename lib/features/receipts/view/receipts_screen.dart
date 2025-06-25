@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
 import 'package:hlvm_mobileapp/services/api.dart';
 import 'package:intl/intl.dart';
+import 'package:hlvm_mobileapp/features/auth/view/settings_screen.dart';
 
 class ReceiptScreen extends StatefulWidget {
   const ReceiptScreen({super.key});
@@ -43,8 +44,27 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Ошибка загрузки данных: $e')));
+      final errorMsg = e.toString();
+      if (errorMsg.contains('Необходимо указать адрес сервера')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                const Text('Необходимо указать адрес сервера в настройках'),
+            action: SnackBarAction(
+              label: 'Настроить',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (context) => const SettingsScreen()),
+                );
+              },
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Ошибка загрузки данных: $e')));
+      }
     }
   }
 

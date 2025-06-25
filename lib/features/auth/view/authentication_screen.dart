@@ -36,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _isLoading = false;
       if (!result['success']) {
-        _errorMessage = result['message'];
+        _errorMessage = result['message'] ?? 'Ошибка авторизации';
       } else {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Авторизация успешна')));
@@ -56,7 +56,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (value == 'settings') {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                    MaterialPageRoute(
+                        builder: (context) => const SettingsScreen()),
                   );
                 }
               },

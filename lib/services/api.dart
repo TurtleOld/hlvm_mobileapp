@@ -8,7 +8,6 @@ import 'authentication.dart';
 class ApiService {
   final Dio _dio = Dio();
   final AuthService _authService = AuthService();
-  final String _defaultBaseUrl = 'https://hlvm.pavlovteam.ru/api';
 
   ApiService() {
     _dio.interceptors.add(InterceptorsWrapper(
@@ -41,16 +40,16 @@ class ApiService {
     final prefs = await SharedPreferences.getInstance();
     final server = prefs.getString('server_address');
     if (server != null && server.isNotEmpty) {
-      return server.endsWith('/api') ? server : server + '/api';
+      return server.endsWith('/api') ? server : '$server/api';
     }
-    return _defaultBaseUrl;
+    throw Exception('Необходимо указать адрес сервера в настройках');
   }
 
   Future<List> listReceipt() async {
     try {
       final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
-      final response = await _dio.get('${baseUrl}/receipts/list/',
+      final response = await _dio.get('$baseUrl/receipts/list/',
           options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
       if (response.statusCode == 200) {
         return response.data;
@@ -66,7 +65,7 @@ class ApiService {
     try {
       final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
-      final response = await _dio.get('${baseUrl}/receipts/seller/$sellerId',
+      final response = await _dio.get('$baseUrl/receipts/seller/$sellerId',
           options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
       if (response.statusCode == 200) {
         return response.data;
@@ -82,7 +81,7 @@ class ApiService {
     try {
       final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
-      final response = await _dio.post('${baseUrl}/receipts/create-receipt/',
+      final response = await _dio.post('$baseUrl/receipts/create-receipt/',
           data: jsonData,
           options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
       if (response.statusCode == 200) {
@@ -99,7 +98,7 @@ class ApiService {
     try {
       final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
-      final response = await _dio.get('${baseUrl}/finaccount/list/',
+      final response = await _dio.get('$baseUrl/finaccount/list/',
           options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
       if (response.statusCode == 200) {
         List<dynamic> data = response.data;
