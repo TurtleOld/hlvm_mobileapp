@@ -87,10 +87,23 @@ class ApiService {
       if (response.statusCode == 200) {
         return 'Чек успешно добавлен!';
       } else {
+        if (response.data != null) {
+          if (response.data is Map && response.data['detail'] != null) {
+            return response.data['detail'].toString();
+          }
+          return response.data.toString();
+        }
         return 'Чек не был добавлен, повторите попытку!';
       }
     } catch (e) {
-      throw Exception("Error: $e");
+      if (e is DioException && e.response?.data != null) {
+        final data = e.response?.data;
+        if (data is Map && data['detail'] != null) {
+          return data['detail'].toString();
+        }
+        return data.toString();
+      }
+      return 'Ошибка: $e';
     }
   }
 

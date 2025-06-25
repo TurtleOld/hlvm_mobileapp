@@ -68,11 +68,14 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
       );
       if (confirmed == true) {
         try {
-          await _apiService.createReceipt(data);
+          final result = await _apiService.createReceipt(data);
           setState(() {
             _jsonData = content;
             _errorMessage = null;
           });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result)),
+          );
         } catch (e) {
           final errorMsg = e.toString();
           if (errorMsg.contains('Необходимо указать адрес сервера')) {

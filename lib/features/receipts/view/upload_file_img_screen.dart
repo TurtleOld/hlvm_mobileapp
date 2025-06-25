@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:hlvm_mobileapp/services/api.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
@@ -10,7 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
 import 'package:hlvm_mobileapp/features/auth/view/authentication_screen.dart';
-import 'package:hlvm_mobileapp/features/finance_account/view/finance_account_screen.dart';
+import 'package:hlvm_mobileapp/features/receipts/view/receipts_screen.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({super.key});
@@ -43,9 +42,23 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         });
 
         final Map<String, dynamic> jsonData = await getJsonReceipt(dataUrl);
-        print('Отправляемые данные:');
+        print('jsonData');
         print(jsonData);
         if (jsonData.containsKey('Error')) {
+          final errorStr = jsonData['Error'].toString();
+          if (errorStr.contains('401') || errorStr.contains('Unauthorized')) {
+            await AuthService().logout(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Сессия истекла, войдите заново')),
+            );
+            await Future.delayed(const Duration(milliseconds: 500));
+            if (mounted) {
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+              );
+            }
+            return;
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Ошибка: ${jsonData['Error']}')),
           );
@@ -64,19 +77,41 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           await Future.delayed(const Duration(milliseconds: 500));
           if (mounted) {
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                  builder: (context) => const FinanceAccountScreen()),
+              MaterialPageRoute(builder: (context) => const ReceiptScreen()),
             );
           }
         } catch (e) {
+          String errorMsg = 'Ошибка при добавлении чека: $e';
+          if (e is DioException) {
+            if (e.response?.statusCode == 401) {
+              await AuthService().logout(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Сессия истекла, войдите заново')),
+              );
+              await Future.delayed(const Duration(milliseconds: 500));
+              if (mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                );
+              }
+              return;
+            }
+            if (e.response?.statusCode == 400) {
+              final data = e.response?.data;
+              if (data is Map && data['detail'] != null) {
+                errorMsg = data['detail'].toString();
+              } else if (data != null) {
+                errorMsg = data.toString();
+              }
+            }
+          }
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка при добавлении чека: $e')),
+            SnackBar(content: Text(errorMsg)),
           );
           await Future.delayed(const Duration(milliseconds: 500));
           if (mounted) {
             Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                  builder: (context) => const FinanceAccountScreen()),
+              MaterialPageRoute(builder: (context) => const ReceiptScreen()),
             );
           }
         }

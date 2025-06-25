@@ -45,7 +45,7 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     final server = prefs.getString('server_address');
     if (server != null && server.isNotEmpty) {
-      return server.endsWith('/api') ? server : server + '/api';
+      return server.endsWith('/api') ? server : '$server/api';
     }
     throw Exception('Необходимо указать адрес сервера');
   }
@@ -53,7 +53,7 @@ class AuthService {
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
       final baseUrl = await _baseUrl;
-      final response = await _dio.post('${baseUrl}/auth/token/', data: {
+      final response = await _dio.post('$baseUrl/auth/token/', data: {
         'username': username,
         'password': password,
       });
@@ -105,7 +105,7 @@ class AuthService {
     try {
       final baseUrl = await _baseUrl;
       final response = await _dio.post(
-        '${baseUrl}/auth/token/refresh/',
+        '$baseUrl/auth/token/refresh/',
         data: {"refresh": refreshToken},
       );
 
