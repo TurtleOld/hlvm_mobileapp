@@ -47,8 +47,6 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         });
 
         final Map<String, dynamic> jsonData = await getJsonReceipt(dataUrl);
-        print('jsonData');
-        print(jsonData);
         if (jsonData.containsKey('Error')) {
           final errorStr = jsonData['Error'].toString();
           if (errorStr.contains('401') || errorStr.contains('Unauthorized')) {
@@ -75,10 +73,9 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           });
           return;
         }
-        String prettyJson = JsonEncoder.withIndent('  ').convert(jsonData);
+
         setState(() {
           _jsonData = jsonData;
-          _stringJson = prettyJson;
         });
         try {
           final createReceipt = await _apiService.createReceipt(jsonData);
@@ -145,8 +142,6 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           }
           return;
         } else if (status == 400) {
-          print('Ошибка 400, ответ сервера:');
-          print(e.response?.data);
           String detailMsg = '';
           final data = e.response?.data;
           if (data is Map && data['detail'] != null) {
@@ -186,19 +181,6 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (_stringJson != null)
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Text(
-                            _stringJson!,
-                            style: const TextStyle(
-                                fontSize: 14, color: Colors.black),
-                          ),
-                        ),
-                      ),
-                    ),
                   const SizedBox(height: 20),
                   if (_dataUrl != null)
                     Text(
@@ -250,6 +232,34 @@ Future<String?> getGithubToken() async {
   return prefs.getString('github_token');
 }
 
+// Функция для преобразования даты в ISO 8601
+String? convertToIsoDate(String? dateStr) {
+  if (dateStr == null) return null;
+  try {
+    // Пробуем распарсить "12.06.2023 18:28"
+    final parts = dateStr.split(' ');
+    if (parts.length == 2) {
+      final dateParts = parts[0].split('.');
+      final timeParts = parts[1].split(':');
+      if (dateParts.length == 3 && timeParts.length >= 2) {
+        final year = int.parse(dateParts[2]);
+        final month = int.parse(dateParts[1]);
+        final day = int.parse(dateParts[0]);
+        final hour = int.parse(timeParts[0]);
+        final minute = int.parse(timeParts[1]);
+        final second = timeParts.length > 2 ? int.parse(timeParts[2]) : 0;
+        final dt = DateTime(year, month, day, hour, minute, second);
+        return dt.toIso8601String();
+      }
+    }
+    // Если уже ISO, возвращаем как есть
+    DateTime.parse(dateStr);
+    return dateStr;
+  } catch (_) {
+    return dateStr; // если не получилось, возвращаем как есть
+  }
+}
+
 Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
   final storage = const FlutterSecureStorage();
   final accessToken = await storage.read(key: 'access_token');
@@ -263,26 +273,31 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
       {
         "role": "system",
         "content":
-            "You are a helpful assistant tasked with providing detailed and accurate descriptions of images. Ensure your responses are thorough, specific, and capture key visual elements, including objects, actions, settings, and any notable details. Avoid assumptions about elements not visible in the image."
+            "Вы — помощник, который извлекает структурированные данные из кассовых чеков по фотографии. Ваша задача — вернуть только корректный JSON без какого-либо дополнительного текста, комментариев или форматирования вне JSON. Не добавляйте пояснений, не используйте markdown. Если какое-либо поле отсутствует на чеке, используйте null для строк, 0 для чисел или пустой массив для списков. Все суммы указывайте в рублях, без знака валюты, с точкой как разделителем. Не придумывайте данные, если их нет на чеке. Поле receipt_date возвращайте строго в формате ISO 8601 (YYYY-MM-DDTHH:MM:SS)."
       },
       {
         "role": "user",
         "content": [
           {
+            "type": "text",
             "text":
-                "Распознай текст чека и только создай JSON где значения должны быть число - тип int или float, слова - тип строка $userId и $selectedAccount - type int: {'seller': {'name_seller': 'имя продавца', 'retail_place_address': 'адрес', 'user': $userId}, 'number_receipt': 'ФД или 0' type int, 'receipt_date': записать в формате ISO 8601 YYYY-MM-DDTHH:MM:SS на чеках может быть в форматах DD.MM.YYYY HH:MM, 'total_sum': итоговая сумма, 'nds20': сумма НДС 20%, 'nds10': сумма НДС 10%, 'operation_type': 1 для ПРИХОД, 2 для РАСХОД, 'product': [{'product_name': 'товар', 'quantity': 'количество', 'amount': 'цена', 'price': 'стоимость за единицу', 'nds_type': 1 если НДС 20%, 2 если НДС 10% type int, 'nds_sum': рассчитанная сумма НДС - type int}], 'user': $userId - type int, 'finance_account': $selectedAccount - type int}. Если данных нет, используй 0 для int или '' для string.",
-            "type": "text"
+                "На изображении кассовый чек. Преобразуйте его в JSON со следующими ключами:\n- name_seller: строка, имя продавца, если указано\n- retail_place_address: строка, адрес расчетов, если указан\n- retail_place: строка, место расчетов, если указано\n- total_sum: число, итоговая сумма в чеке\n- operation_type: число, 1 для 'Приход', 2 для 'Расход'\n- receipt_date: строка, дата и время в формате ISO 8601 (YYYY-MM-DDTHH:MM:SS)\n- number_receipt: число, номер ФД из чека\n- nds10: число, сумма НДС 10%, если указано, иначе 0\n- nds20: число, сумма НДС 20%, если указано, иначе 0\n- items: массив товаров, каждый товар — отдельный объект со следующими полями:\n  - product_name: строка, название товара\n  - category: строка, категория товара (определяется по названию, если возможно)\n  - price: число, цена за единицу товара\n  - quantity: число, количество товара\n  - amount: число, общая сумма за товар (цена × количество)\nНе объединяйте товары, даже если они полностью совпадают. Каждый товар на чеке — отдельный элемент массива items. Не пропускайте товары с нулевой ценой или количеством. Если данные отсутствуют, используйте null или 0."
           },
           {
-            "image_url": {"url": dataUrl, "detail": "high"},
-            "type": "image_url"
+            "type": "text",
+            "text":
+                "Пример чека:\n1. Хлеб пшеничный 25.00 руб x 2 = 50.00\n2. Хлеб пшеничный 25.00 руб x 1 = 25.00\n3. Молоко 3% 45.00 руб x 1 = 45.00\n\nОжидаемый JSON:\n{\n  \"items\": [\n    {\"product_name\": \"Хлеб пшеничный\", \"category\": \"Хлебобулочные изделия\", \"price\": 25.00, \"quantity\": 2, \"amount\": 50.00},\n    {\"product_name\": \"Хлеб пшеничный\", \"category\": \"Хлебобулочные изделия\", \"price\": 25.00, \"quantity\": 1, \"amount\": 25.00},\n    {\"product_name\": \"Молоко 3%\", \"category\": null, \"price\": 45.00, \"quantity\": 1, \"amount\": 45.00}\n  ]\n}\nКаждая строка товара должна быть отдельным объектом в массиве items, даже если названия совпадают."
+          },
+          {
+            "type": "image_url",
+            "image_url": {"url": dataUrl, "detail": "high"}
           }
         ]
       }
     ],
     "model": "openai/gpt-4.1",
     "max_tokens": 2048,
-    "temperature": 1,
+    "temperature": 0.6,
     "top_p": 1
   };
   final githubToken = await getGithubToken();
@@ -300,7 +315,27 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
     String rawResponse = response.data['choices'][0]['message']['content'];
     String cleanedResponse =
         rawResponse.replaceAll('```json', '').replaceAll('```', '').trim();
-    return jsonDecode(cleanedResponse);
+    final result = jsonDecode(cleanedResponse);
+    // Автоматически преобразуем дату в ISO 8601, если нужно
+    if (result is Map<String, dynamic> && result.containsKey('receipt_date')) {
+      result['receipt_date'] =
+          convertToIsoDate(result['receipt_date']?.toString());
+    }
+    if (result is Map<String, dynamic>) {
+      if (!result.containsKey('account') || result['account'] == null) {
+        result['account'] = selectedAccount;
+        print('account');
+        print(result['account']);
+      }
+      if (!result.containsKey('user') || result['user'] == null) {
+        result['user'] = userId;
+        print('user');
+        print(result['user']);
+      }
+    }
+    print('result');
+    print(result);
+    return result;
   } catch (e) {
     if (e is DioException) {
       return {'Error': e.response?.data?.toString() ?? e.toString()};

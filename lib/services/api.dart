@@ -84,6 +84,7 @@ class ApiService {
       final response = await _dio.post('$baseUrl/receipts/create-receipt/',
           data: jsonData,
           options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
+      print(response.data);
       if (response.statusCode == 200) {
         return 'Чек успешно добавлен!';
       } else {
@@ -96,6 +97,8 @@ class ApiService {
         return 'Чек не был добавлен, повторите попытку!';
       }
     } catch (e) {
+      print('Error: $e');
+      print(e);
       if (e is DioException && e.response?.data != null) {
         final data = e.response?.data;
         if (data is Map && data['detail'] != null) {
