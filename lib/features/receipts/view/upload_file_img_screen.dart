@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
 import 'package:hlvm_mobileapp/features/auth/view/authentication_screen.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/receipts_screen.dart';
+import 'package:hlvm_mobileapp/main.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({super.key});
@@ -25,10 +26,14 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   String? _dataUrl;
   Map<String, dynamic>? _jsonData;
   String? _stringJson;
+  bool _isLoading = false;
 
   final ImagePicker _picker = ImagePicker();
 
   Future<void> _captureImage(ImageSource source) async {
+    setState(() {
+      _isLoading = true;
+    });
     try {
       final XFile? image = await _picker.pickImage(source: source);
       if (image != null) {
@@ -57,11 +62,17 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
                 MaterialPageRoute(builder: (context) => const LoginScreen()),
               );
             }
+            setState(() {
+              _isLoading = false;
+            });
             return;
           }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Ошибка: ${jsonData['Error']}')),
           );
+          setState(() {
+            _isLoading = false;
+          });
           return;
         }
         String prettyJson = JsonEncoder.withIndent('  ').convert(jsonData);
@@ -76,8 +87,10 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           );
           await Future.delayed(const Duration(milliseconds: 500));
           if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const ReceiptScreen()),
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                  builder: (context) => const HomePage(selectedIndex: 1)),
+              (route) => false,
             );
           }
         } catch (e) {
@@ -94,6 +107,9 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
                 );
               }
+              setState(() {
+                _isLoading = false;
+              });
               return;
             }
             if (e.response?.statusCode == 400) {
@@ -151,6 +167,10 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           SnackBar(content: Text('Неизвестная ошибка: $e')),
         );
       }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
@@ -161,41 +181,44 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         title: const Text('Обработка фото чека'),
       ),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (_stringJson != null)
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Text(
-                      _stringJson!,
-                      style: const TextStyle(fontSize: 14, color: Colors.black),
+        child: _isLoading
+            ? const CircularProgressIndicator()
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (_stringJson != null)
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            _stringJson!,
+                            style: const TextStyle(
+                                fontSize: 14, color: Colors.black),
+                          ),
+                        ),
+                      ),
                     ),
+                  const SizedBox(height: 20),
+                  if (_dataUrl != null)
+                    Text(
+                      _responseDataUrl,
+                      style: const TextStyle(fontSize: 12, color: Colors.green),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 3,
+                    ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () => _captureImage(ImageSource.camera),
+                    child: const Text('Сделать фото'),
                   ),
-                ),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: () => _captureImage(ImageSource.gallery),
+                    child: const Text('Выбрать из галереи'),
+                  ),
+                ],
               ),
-            const SizedBox(height: 20),
-            if (_dataUrl != null)
-              Text(
-                _responseDataUrl,
-                style: const TextStyle(fontSize: 12, color: Colors.green),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 3,
-              ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => _captureImage(ImageSource.camera),
-              child: const Text('Сделать фото'),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () => _captureImage(ImageSource.gallery),
-              child: const Text('Выбрать из галереи'),
-            ),
-          ],
-        ),
       ),
     );
   }

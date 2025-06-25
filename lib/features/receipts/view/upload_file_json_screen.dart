@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
 import 'package:hlvm_mobileapp/services/api.dart';
 import 'package:hlvm_mobileapp/features/auth/view/settings_screen.dart';
+import 'package:hlvm_mobileapp/main.dart';
 
 class FileReaderScreen extends StatefulWidget {
   const FileReaderScreen({super.key});
@@ -15,7 +16,6 @@ class FileReaderScreen extends StatefulWidget {
 }
 
 class _FileReaderScreenState extends State<FileReaderScreen> {
-  dynamic _jsonData;
   String? _errorMessage;
   final ApiService _apiService = ApiService();
 
@@ -70,12 +70,19 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
         try {
           final result = await _apiService.createReceipt(data);
           setState(() {
-            _jsonData = content;
             _errorMessage = null;
           });
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(result)),
           );
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                  builder: (context) => const HomePage(selectedIndex: 1)),
+              (route) => false,
+            );
+          }
         } catch (e) {
           final errorMsg = e.toString();
           if (errorMsg.contains('Необходимо указать адрес сервера')) {
