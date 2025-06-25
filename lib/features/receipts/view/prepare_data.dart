@@ -1,4 +1,5 @@
 import 'package:jwt_decoder/jwt_decoder.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'parser_json.dart';
@@ -16,8 +17,9 @@ class PrepareData {
 
   Future<Map<String, dynamic>> prepareData(
       Map<String, dynamic> jsonData) async {
+    final storage = const FlutterSecureStorage();
+    final accessToken = await storage.read(key: 'access_token');
     final prefs = await SharedPreferences.getInstance();
-    final accessToken = prefs.getString('access_token');
     final selectedAccount = prefs.getInt('selectedAccountId');
     final Map<String, dynamic> decodedToken = JwtDecoder.decode(accessToken!);
     final int userId = decodedToken['user_id'];

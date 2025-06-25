@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:hlvm_mobileapp/services/api.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
@@ -125,8 +126,9 @@ Future<String> getImageDataUrl(String imagePath, String imageFormat) async {
 }
 
 Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
+  final storage = const FlutterSecureStorage();
+  final accessToken = await storage.read(key: 'access_token');
   final prefs = await SharedPreferences.getInstance();
-  final accessToken = prefs.getString('access_token');
   final selectedAccount = prefs.getInt('selectedAccountId');
   final Map<String, dynamic> decodedToken = JwtDecoder.decode(accessToken!);
   final int userId = decodedToken['user_id'];
