@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
+import 'settings_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -53,7 +54,10 @@ class _LoginScreenState extends State<LoginScreen> {
           PopupMenuButton(
               onSelected: (value) {
                 if (value == 'settings') {
-                  print('Переход на экран настроек');
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                  );
                 }
               },
               itemBuilder: (context) => [

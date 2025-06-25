@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:hlvm_mobileapp/models/finance_account_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'authentication.dart';
 
 class ApiService {
   final Dio _dio = Dio();
   final AuthService _authService = AuthService();
-  final String _baseUrl = 'https://hlvm.pavlovteam.ru/api';
+  final String _defaultBaseUrl = 'https://hlvm.pavlovteam.ru/api';
 
   ApiService() {
     _dio.interceptors.add(InterceptorsWrapper(
@@ -36,10 +37,20 @@ class ApiService {
     ));
   }
 
+  Future<String> get _baseUrl async {
+    final prefs = await SharedPreferences.getInstance();
+    final server = prefs.getString('server_address');
+    if (server != null && server.isNotEmpty) {
+      return server.endsWith('/api') ? server : server + '/api';
+    }
+    return _defaultBaseUrl;
+  }
+
   Future<List> listReceipt() async {
     try {
       final accessToken = await _authService.getAccessToken();
-      final response = await _dio.get('$_baseUrl/receipts/list/',
+      final baseUrl = await _baseUrl;
+      final response = await _dio.get('${baseUrl}/receipts/list/',
           options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
       if (response.statusCode == 200) {
         return response.data;
@@ -54,7 +65,8 @@ class ApiService {
   Future<Map<String, dynamic>> getSeller(int sellerId) async {
     try {
       final accessToken = await _authService.getAccessToken();
-      final response = await _dio.get('$_baseUrl/receipts/seller/$sellerId',
+      final baseUrl = await _baseUrl;
+      final response = await _dio.get('${baseUrl}/receipts/seller/$sellerId',
           options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
       if (response.statusCode == 200) {
         return response.data;
@@ -69,7 +81,8 @@ class ApiService {
   Future<String> createReceipt(Map<String, dynamic> jsonData) async {
     try {
       final accessToken = await _authService.getAccessToken();
-      final response = await _dio.post('$_baseUrl/receipts/create-receipt/',
+      final baseUrl = await _baseUrl;
+      final response = await _dio.post('${baseUrl}/receipts/create-receipt/',
           data: jsonData,
           options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
       if (response.statusCode == 200) {
@@ -85,7 +98,8 @@ class ApiService {
   Future<List<FinanceAccount>> fetchFinanceAccount() async {
     try {
       final accessToken = await _authService.getAccessToken();
-      final response = await _dio.get('$_baseUrl/finaccount/list/',
+      final baseUrl = await _baseUrl;
+      final response = await _dio.get('${baseUrl}/finaccount/list/',
           options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
       if (response.statusCode == 200) {
         List<dynamic> data = response.data;
