@@ -324,17 +324,11 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
     if (result is Map<String, dynamic>) {
       if (!result.containsKey('account') || result['account'] == null) {
         result['account'] = selectedAccount;
-        print('account');
-        print(result['account']);
       }
       if (!result.containsKey('user') || result['user'] == null) {
         result['user'] = userId;
-        print('user');
-        print(result['user']);
       }
     }
-    print('result');
-    print(result);
     return result;
   } catch (e) {
     if (e is DioException) {

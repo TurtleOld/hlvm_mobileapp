@@ -10,30 +10,32 @@ class ApiService {
   final AuthService _authService = AuthService();
 
   ApiService() {
-    _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) async {
-        final accessToken = await _authService.getAccessToken();
-        if (accessToken != null) {
-          options.headers['Authorization'] = 'Bearer $accessToken';
-        }
-        return handler.next(options);
-      },
-      onError: (error, handler) async {
-        if (error.response?.statusCode == 401) {
-          try {
-            await _authService.refreshToken();
-            final newAccessToken = await _authService.getAccessToken();
-            error.requestOptions.headers['Authorization'] =
-                'Bearer $newAccessToken';
-            final response = await _dio.fetch(error.requestOptions);
-            return handler.resolve(response);
-          } catch (e) {
-            return handler.reject(error);
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) async {
+          final accessToken = await _authService.getAccessToken();
+          if (accessToken != null) {
+            options.headers['Authorization'] = 'Bearer $accessToken';
           }
-        }
-        return handler.next(error);
-      },
-    ));
+          return handler.next(options);
+        },
+        onError: (error, handler) async {
+          if (error.response?.statusCode == 401) {
+            try {
+              await _authService.refreshToken();
+              final newAccessToken = await _authService.getAccessToken();
+              error.requestOptions.headers['Authorization'] =
+                  'Bearer $newAccessToken';
+              final response = await _dio.fetch(error.requestOptions);
+              return handler.resolve(response);
+            } catch (e) {
+              return handler.reject(error);
+            }
+          }
+          return handler.next(error);
+        },
+      ),
+    );
   }
 
   Future<String> get _baseUrl async {
@@ -49,8 +51,10 @@ class ApiService {
     try {
       final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
-      final response = await _dio.get('$baseUrl/receipts/list/',
-          options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
+      final response = await _dio.get(
+        '$baseUrl/receipts/list/',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
       if (response.statusCode == 200) {
         return response.data;
       } else {
@@ -65,8 +69,10 @@ class ApiService {
     try {
       final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
-      final response = await _dio.get('$baseUrl/receipts/seller/$sellerId',
-          options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
+      final response = await _dio.get(
+        '$baseUrl/receipts/seller/$sellerId',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
       if (response.statusCode == 200) {
         return response.data;
       } else {
@@ -81,9 +87,11 @@ class ApiService {
     try {
       final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
-      final response = await _dio.post('$baseUrl/receipts/create-receipt/',
-          data: jsonData,
-          options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
+      final response = await _dio.post(
+        '$baseUrl/receipts/create-receipt/',
+        data: jsonData,
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
       print(response.data);
       if (response.statusCode == 200) {
         return 'Чек успешно добавлен!';
@@ -114,8 +122,10 @@ class ApiService {
     try {
       final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
-      final response = await _dio.get('$baseUrl/finaccount/list/',
-          options: Options(headers: {'Authorization': 'Bearer $accessToken'}));
+      final response = await _dio.get(
+        '$baseUrl/finaccount/list/',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
       if (response.statusCode == 200) {
         List<dynamic> data = response.data;
         return data.map((json) => FinanceAccount.fromJson(json)).toList();

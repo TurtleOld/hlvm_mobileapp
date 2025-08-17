@@ -53,10 +53,13 @@ class AuthService {
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
       final baseUrl = await _baseUrl;
-      final response = await _dio.post('$baseUrl/auth/token/', data: {
-        'username': username,
-        'password': password,
-      });
+
+      final response = await _dio.post(
+        '$baseUrl/auth/token/',
+        data: {'username': username, 'password': password},
+        options: Options(headers: {'Content-Type': 'application/json'}),
+      );
+
       if (response.statusCode == 200) {
         final accessToken = response.data['access'];
         final refreshToken = response.data['refresh'];
@@ -81,7 +84,7 @@ class AuthService {
       if (e.toString().contains('Необходимо указать адрес сервера')) {
         return {
           'success': false,
-          'message': 'Необходимо указать адрес сервера в настройках'
+          'message': 'Необходимо указать адрес сервера в настройках',
         };
       }
       return {'success': false, 'message': 'Ошибка $e'};
@@ -104,9 +107,11 @@ class AuthService {
 
     try {
       final baseUrl = await _baseUrl;
+
       final response = await _dio.post(
         '$baseUrl/auth/token/refresh/',
         data: {"refresh": refreshToken},
+        options: Options(headers: {'Content-Type': 'application/json'}),
       );
 
       final newAccessToken = response.data['access'];
