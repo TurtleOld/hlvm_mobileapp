@@ -32,7 +32,11 @@ class _LoginScreenState extends State<LoginScreen> {
       });
       return;
     }
+
     final result = await _authService.login(username, password);
+
+    if (!mounted) return;
+
     setState(() {
       _isLoading = false;
       if (!result['success']) {

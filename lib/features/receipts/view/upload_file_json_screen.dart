@@ -16,7 +16,6 @@ class FileReaderScreen extends StatefulWidget {
 }
 
 class _FileReaderScreenState extends State<FileReaderScreen> {
-  String? _errorMessage;
   final ApiService _apiService = ApiService();
 
   Future<void> _pickAndReadFile() async {
@@ -24,6 +23,7 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
       type: FileType.any,
       //allowedExtensions: ['json'],
     );
+    if (!mounted) return;
     if (result != null) {
       final file = result.files.first;
       final filePath = file.path;
@@ -37,12 +37,15 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
       }
 
       final fileContent = await readFileContent(filePath);
+      if (!mounted) return;
 
       final decodedJson = jsonDecode(fileContent);
       final content = decodedJson is List ? decodedJson[0] : decodedJson;
       final prepareData = PrepareData();
 
       final data = await prepareData.prepareData(content);
+      if (!mounted) return;
+
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) {
@@ -69,14 +72,11 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
       if (confirmed == true) {
         try {
           final result = await _apiService.createReceipt(data);
-          setState(() {
-            _errorMessage = null;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result)),
-          );
-          await Future.delayed(const Duration(milliseconds: 500));
           if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(result)),
+            );
+            await Future.delayed(const Duration(milliseconds: 500));
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(
                   builder: (context) => const HomePage(selectedIndex: 1)),
@@ -102,9 +102,11 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
               ),
             );
           } else {
-            setState(() {
-              _errorMessage = 'Ошибка: $e';
-            });
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Ошибка: $e')),
+              );
+            }
           }
         }
       } else {
@@ -134,10 +136,4 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
       ),
     );
   }
-}
-
-@override
-Widget build(BuildContext context) {
-  // TODO: implement build
-  throw UnimplementedError();
 }

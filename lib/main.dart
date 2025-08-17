@@ -6,6 +6,7 @@ import 'package:hlvm_mobileapp/features/finance_account/view/view.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
 import 'package:hlvm_mobileapp/features/auth/view/github_token_settings_screen.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
+import 'package:hlvm_mobileapp/core/theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,10 +38,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.lightTheme,
       home: widget.isLoggedIn ? const HomePage() : const LoginScreen(),
       routes: {
         '/login': (context) => const LoginScreen(),
@@ -80,7 +78,9 @@ class _HomePageState extends State<HomePage> {
   void _onItemTapped(int index) async {
     if (index == 3) {
       await AuthService().logout(context);
-      Navigator.pushReplacementNamed(context, '/login');
+      if (mounted) {
+        Navigator.pushReplacementNamed(context, '/login');
+      }
     } else {
       setState(() {
         _selectedIndex = index;

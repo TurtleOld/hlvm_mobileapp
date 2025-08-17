@@ -133,7 +133,7 @@ class AuthService {
     await _secureStorage.delete(key: 'access_token');
     await _secureStorage.delete(key: 'refresh_token');
     await _secureStorage.delete(key: 'isLoggedIn');
-    if (context != null) {
+    if (context != null && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Вы успешно вышли из аккаунта')),
       );

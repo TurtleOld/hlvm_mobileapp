@@ -22,10 +22,7 @@ class ImageCaptureScreen extends StatefulWidget {
 class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   final ApiService _apiService = ApiService();
   final String _responseDataUrl = '';
-  XFile? _imageFile;
   String? _dataUrl;
-  Map<String, dynamic>? _jsonData;
-  String? _stringJson;
   bool _isLoading = false;
 
   final ImagePicker _picker = ImagePicker();
@@ -36,26 +33,26 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     });
     try {
       final XFile? image = await _picker.pickImage(source: source);
+      if (!mounted) return;
       if (image != null) {
-        setState(() {
-          _imageFile = image;
-        });
-
         final String dataUrl = await getImageDataUrl(image.path, 'jpg');
+        if (!mounted) return;
+
         setState(() {
           _dataUrl = dataUrl;
         });
 
         final Map<String, dynamic> jsonData = await getJsonReceipt(dataUrl);
+        if (!mounted) return;
         if (jsonData.containsKey('Error')) {
           final errorStr = jsonData['Error'].toString();
           if (errorStr.contains('401') || errorStr.contains('Unauthorized')) {
             await AuthService().logout(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Сессия истекла, войдите заново')),
-            );
-            await Future.delayed(const Duration(milliseconds: 500));
             if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Сессия истекла, войдите заново')),
+              );
+              await Future.delayed(const Duration(milliseconds: 500));
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(builder: (context) => const LoginScreen()),
               );
@@ -65,25 +62,24 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
             });
             return;
           }
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка: ${jsonData['Error']}')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Ошибка: ${jsonData['Error']}')),
+            );
+          }
           setState(() {
             _isLoading = false;
           });
           return;
         }
 
-        setState(() {
-          _jsonData = jsonData;
-        });
         try {
           final createReceipt = await _apiService.createReceipt(jsonData);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(createReceipt)),
-          );
-          await Future.delayed(const Duration(milliseconds: 500));
           if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(createReceipt)),
+            );
+            await Future.delayed(const Duration(milliseconds: 500));
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(
                   builder: (context) => const HomePage(selectedIndex: 1)),
@@ -95,11 +91,12 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           if (e is DioException) {
             if (e.response?.statusCode == 401) {
               await AuthService().logout(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Сессия истекла, войдите заново')),
-              );
-              await Future.delayed(const Duration(milliseconds: 500));
               if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Сессия истекла, войдите заново')),
+                );
+                await Future.delayed(const Duration(milliseconds: 500));
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
                 );
@@ -118,11 +115,11 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
               }
             }
           }
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(errorMsg)),
-          );
-          await Future.delayed(const Duration(milliseconds: 500));
           if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(errorMsg)),
+            );
+            await Future.delayed(const Duration(milliseconds: 500));
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (context) => const ReceiptScreen()),
             );
@@ -149,18 +146,24 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           } else if (data != null) {
             detailMsg = data.toString();
           }
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка запроса: $detailMsg')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Ошибка запроса: $detailMsg')),
+            );
+          }
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка: $serverMsg')),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Ошибка: $serverMsg')),
+            );
+          }
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Неизвестная ошибка: $e')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Неизвестная ошибка: $e')),
+          );
+        }
       }
     } finally {
       setState(() {

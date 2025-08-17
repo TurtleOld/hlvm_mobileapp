@@ -44,6 +44,9 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       setState(() {
         _isLoading = false;
       });
+
+      if (!mounted) return;
+
       final errorMsg = e.toString();
       if (errorMsg.contains('Необходимо указать адрес сервера')) {
         ScaffoldMessenger.of(context).showSnackBar(
