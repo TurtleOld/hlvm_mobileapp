@@ -10,32 +10,8 @@ class ApiService {
   final AuthService _authService = AuthService();
 
   ApiService() {
-    _dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          final accessToken = await _authService.getAccessToken();
-          if (accessToken != null) {
-            options.headers['Authorization'] = 'Bearer $accessToken';
-          }
-          return handler.next(options);
-        },
-        onError: (error, handler) async {
-          if (error.response?.statusCode == 401) {
-            try {
-              await _authService.refreshToken();
-              final newAccessToken = await _authService.getAccessToken();
-              error.requestOptions.headers['Authorization'] =
-                  'Bearer $newAccessToken';
-              final response = await _dio.fetch(error.requestOptions);
-              return handler.resolve(response);
-            } catch (e) {
-              return handler.reject(error);
-            }
-          }
-          return handler.next(error);
-        },
-      ),
-    );
+    // Используем interceptor из AuthService вместо дублирования
+    _dio.interceptors.addAll(_authService.dio.interceptors);
   }
 
   Future<String> get _baseUrl async {
@@ -49,11 +25,9 @@ class ApiService {
 
   Future<List> listReceipt() async {
     try {
-      final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
       final response = await _dio.get(
         '$baseUrl/receipts/list/',
-        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
       );
       if (response.statusCode == 200) {
         return response.data;
@@ -67,11 +41,9 @@ class ApiService {
 
   Future<Map<String, dynamic>> getSeller(int sellerId) async {
     try {
-      final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
       final response = await _dio.get(
         '$baseUrl/receipts/seller/$sellerId',
-        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
       );
       if (response.statusCode == 200) {
         return response.data;
@@ -85,12 +57,15 @@ class ApiService {
 
   Future<String> createReceipt(Map<String, dynamic> jsonData) async {
     try {
-      final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
       final response = await _dio.post(
         '$baseUrl/receipts/create-receipt/',
         data: jsonData,
-        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        ),
       );
       if (response.statusCode == 200) {
         return 'Чек успешно добавлен!';
@@ -104,12 +79,30 @@ class ApiService {
         return 'Чек не был добавлен, повторите попытку!';
       }
     } catch (e) {
-      if (e is DioException && e.response?.data != null) {
-        final data = e.response?.data;
-        if (data is Map && data['detail'] != null) {
-          return data['detail'].toString();
+      if (e is DioException) {
+        // Обработка ошибок авторизации
+        if (e.response?.statusCode == 401) {
+          return 'Ошибка авторизации. Попробуйте войти заново.';
         }
-        return data.toString();
+
+        if (e.response?.data != null) {
+          final data = e.response?.data;
+          if (data is Map && data['detail'] != null) {
+            return data['detail'].toString();
+          }
+          return data.toString();
+        }
+
+        // Обработка сетевых ошибок
+        if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout) {
+          return 'Ошибка подключения к серверу. Проверьте интернет-соединение.';
+        }
+
+        if (e.type == DioExceptionType.connectionError) {
+          return 'Не удалось подключиться к серверу. Проверьте адрес сервера.';
+        }
       }
       return 'Ошибка: $e';
     }
@@ -117,11 +110,9 @@ class ApiService {
 
   Future<List<FinanceAccount>> fetchFinanceAccount() async {
     try {
-      final accessToken = await _authService.getAccessToken();
       final baseUrl = await _baseUrl;
       final response = await _dio.get(
         '$baseUrl/finaccount/list/',
-        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
       );
       if (response.statusCode == 200) {
         List<dynamic> data = response.data;

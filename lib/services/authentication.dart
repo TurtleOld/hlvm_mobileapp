@@ -117,16 +117,36 @@ class AuthService {
       final newAccessToken = response.data['access'];
       await _secureStorage.write(key: 'access_token', value: newAccessToken);
     } catch (e) {
-      // Удаляем токены вручную, если нет контекста
-      await _secureStorage.delete(key: 'access_token');
-      await _secureStorage.delete(key: 'refresh_token');
-      await _secureStorage.delete(key: 'isLoggedIn');
-      throw Exception("Сессия истекла, войдите заново");
+      // Проверяем, является ли ошибка критической
+      if (e is DioException) {
+        // Если это ошибка 401 (неверный refresh token), то выходим из аккаунта
+        if (e.response?.statusCode == 401) {
+          await _clearTokens();
+          throw Exception("Сессия истекла, войдите заново");
+        }
+
+        // Для других ошибок (сеть, сервер) не выходим из аккаунта
+        if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout ||
+            e.type == DioExceptionType.connectionError) {
+          throw Exception("Ошибка подключения к серверу");
+        }
+      }
+
+      // Для других типов ошибок также не выходим из аккаунта
+      throw Exception("Ошибка обновления токена: $e");
     }
   }
 
   Future<String?> getAccessToken() async {
     return await _secureStorage.read(key: 'access_token');
+  }
+
+  Future<void> _clearTokens() async {
+    await _secureStorage.delete(key: 'access_token');
+    await _secureStorage.delete(key: 'refresh_token');
+    await _secureStorage.delete(key: 'isLoggedIn');
   }
 
   Future<void> logout([BuildContext? context]) async {
@@ -139,4 +159,13 @@ class AuthService {
       );
     }
   }
+
+  Future<String?> getCurrentUsername() async {
+    // Можно расширить для получения имени пользователя из токена
+    // или из дополнительного хранилища
+    return 'Пользователь';
+  }
+
+  // Геттер для доступа к Dio instance с настроенными interceptors
+  Dio get dio => _dio;
 }

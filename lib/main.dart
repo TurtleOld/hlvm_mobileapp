@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hlvm_mobileapp/features/auth/view/authentication_screen.dart';
@@ -6,14 +7,27 @@ import 'package:hlvm_mobileapp/features/finance_account/view/view.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
 import 'package:hlvm_mobileapp/features/auth/view/github_token_settings_screen.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
+import 'package:hlvm_mobileapp/services/api.dart';
 import 'package:hlvm_mobileapp/core/theme/app_theme.dart';
+import 'package:hlvm_mobileapp/features/auth/bloc/bloc.dart';
+import 'package:hlvm_mobileapp/features/finance_account/bloc/bloc.dart';
+import 'package:hlvm_mobileapp/features/receipts/bloc/bloc.dart';
+import 'package:hlvm_mobileapp/core/services/talker_service.dart';
+import 'package:hlvm_mobileapp/core/bloc/talker_bloc.dart';
+import 'package:hlvm_mobileapp/core/widgets/talker_notification_widget.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Инициализация Talker
+  final talkerService = TalkerService();
+  talkerService.initialize();
+
   final bool isLoggedIn = await checkLoggedIn();
   await dotenv.load(fileName: ".env");
   runApp(MyApp(
     isLoggedIn: isLoggedIn,
+    talkerService: talkerService,
   ));
 }
 
@@ -27,8 +41,13 @@ Future<bool> checkLoggedIn() async {
 
 class MyApp extends StatefulWidget {
   final bool isLoggedIn;
+  final TalkerService talkerService;
 
-  const MyApp({super.key, required this.isLoggedIn});
+  const MyApp({
+    super.key,
+    required this.isLoggedIn,
+    required this.talkerService,
+  });
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -37,15 +56,50 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      theme: AppTheme.lightTheme,
-      home: widget.isLoggedIn ? const HomePage() : const LoginScreen(),
-      routes: {
-        '/login': (context) => const LoginScreen(),
-        '/home': (context) => const HomePage(),
-        '/uploadFile': (context) => const FileReaderScreen(),
-        '/image_capture': (context) => const ImageCaptureScreen(),
-      },
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<TalkerBloc>(
+          create: (context) => TalkerBloc(
+            talkerService: widget.talkerService,
+          ),
+        ),
+        BlocProvider<AuthBloc>(
+          create: (context) => AuthBloc(
+            authService: AuthService(),
+            talkerBloc: context.read<TalkerBloc>(),
+          )..add(CheckAuthStatus()),
+        ),
+        BlocProvider<FinanceAccountBloc>(
+          create: (context) => FinanceAccountBloc(
+            apiService: ApiService(),
+            talkerBloc: context.read<TalkerBloc>(),
+          ),
+        ),
+        BlocProvider<ReceiptBloc>(
+          create: (context) => ReceiptBloc(
+            apiService: ApiService(),
+            talkerBloc: context.read<TalkerBloc>(),
+          ),
+        ),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: widget.isLoggedIn ? const HomePage() : const LoginScreen(),
+        routes: {
+          '/login': (context) => const LoginScreen(),
+          '/home': (context) => const HomePage(),
+          '/uploadFile': (context) => const FileReaderScreen(),
+          '/image_capture': (context) => const ImageCaptureScreen(),
+        },
+        builder: (context, child) {
+          return Stack(
+            children: [
+              child!,
+              const TalkerNotificationWidget(),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -77,7 +131,7 @@ class _HomePageState extends State<HomePage> {
   // Обработчик нажатия на элемент BottomNavigationBar
   void _onItemTapped(int index) async {
     if (index == 3) {
-      await AuthService().logout(context);
+      context.read<AuthBloc>().add(LogoutRequested());
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/login');
       }

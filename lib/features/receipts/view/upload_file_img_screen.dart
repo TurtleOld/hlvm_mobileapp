@@ -9,6 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
 import 'package:hlvm_mobileapp/features/auth/view/authentication_screen.dart';
+import 'package:hlvm_mobileapp/features/auth/view/settings_screen.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/receipts_screen.dart';
 import 'package:hlvm_mobileapp/main.dart';
 
@@ -31,6 +32,72 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     setState(() {
       _isLoading = true;
     });
+
+    // Сохраняем контекст до async операций
+    final currentContext = context;
+
+    // Проверяем аутентификацию перед началом обработки
+    final storage = const FlutterSecureStorage();
+    final accessToken = await storage.read(key: 'access_token');
+    if (accessToken == null) {
+      if (mounted) {
+        await AuthService().logout(currentContext);
+        ScaffoldMessenger.of(currentContext).showSnackBar(
+          const SnackBar(content: Text('Сессия истекла, войдите заново')),
+        );
+        await Future.delayed(const Duration(milliseconds: 500));
+        Navigator.of(currentContext).pushReplacement(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
+      }
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final selectedAccount = prefs.getInt('selectedAccountId');
+    if (selectedAccount == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(currentContext).showSnackBar(
+          const SnackBar(content: Text('Сначала выберите финансовый аккаунт')),
+        );
+      }
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    // Проверяем наличие GitHub токена
+    final githubToken = await getGithubToken();
+    if (githubToken == null || githubToken.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(currentContext).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'GitHub API токен не настроен. Перейдите в настройки и добавьте токен GitHub.'),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Настройки',
+              onPressed: () {
+                Navigator.of(currentContext).push(
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      }
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
     try {
       final XFile? image = await _picker.pickImage(source: source);
       if (!mounted) return;
@@ -46,14 +113,18 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         if (!mounted) return;
         if (jsonData.containsKey('Error')) {
           final errorStr = jsonData['Error'].toString();
-          if (errorStr.contains('401') || errorStr.contains('Unauthorized')) {
-            await AuthService().logout(context);
+
+          // Проверяем, является ли это ошибкой аутентификации к нашему серверу
+          if (errorStr.contains('401') &&
+              (errorStr.contains('Access token not found') ||
+                  errorStr.contains('Unauthorized'))) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
+              await AuthService().logout(currentContext);
+              ScaffoldMessenger.of(currentContext).showSnackBar(
                 const SnackBar(content: Text('Сессия истекла, войдите заново')),
               );
               await Future.delayed(const Duration(milliseconds: 500));
-              Navigator.of(context).pushReplacement(
+              Navigator.of(currentContext).pushReplacement(
                 MaterialPageRoute(builder: (context) => const LoginScreen()),
               );
             }
@@ -62,8 +133,34 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
             });
             return;
           }
+
+          // Для ошибок GitHub API показываем сообщение без выхода из аккаунта
+          if (errorStr.contains('GitHub API')) {
+            if (mounted) {
+              ScaffoldMessenger.of(currentContext).showSnackBar(
+                SnackBar(
+                  content: Text(errorStr),
+                  duration: const Duration(seconds: 5),
+                  action: SnackBarAction(
+                    label: 'Настройки',
+                    onPressed: () {
+                      Navigator.of(currentContext).push(
+                        MaterialPageRoute(
+                          builder: (context) => const SettingsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              );
+            }
+            setState(() {
+              _isLoading = false;
+            });
+            return;
+          }
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(currentContext).showSnackBar(
               SnackBar(content: Text('Ошибка: ${jsonData['Error']}')),
             );
           }
@@ -76,11 +173,11 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         try {
           final createReceipt = await _apiService.createReceipt(jsonData);
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(currentContext).showSnackBar(
               SnackBar(content: Text(createReceipt)),
             );
             await Future.delayed(const Duration(milliseconds: 500));
-            Navigator.of(context).pushAndRemoveUntil(
+            Navigator.of(currentContext).pushAndRemoveUntil(
               MaterialPageRoute(
                   builder: (context) => const HomePage(selectedIndex: 1)),
               (route) => false,
@@ -90,14 +187,14 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           String errorMsg = 'Ошибка при добавлении чека: $e';
           if (e is DioException) {
             if (e.response?.statusCode == 401) {
-              await AuthService().logout(context);
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                await AuthService().logout(currentContext);
+                ScaffoldMessenger.of(currentContext).showSnackBar(
                   const SnackBar(
                       content: Text('Сессия истекла, войдите заново')),
                 );
                 await Future.delayed(const Duration(milliseconds: 500));
-                Navigator.of(context).pushReplacement(
+                Navigator.of(currentContext).pushReplacement(
                   MaterialPageRoute(builder: (context) => const LoginScreen()),
                 );
               }
@@ -116,11 +213,11 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
             }
           }
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            ScaffoldMessenger.of(currentContext).showSnackBar(
               SnackBar(content: Text(errorMsg)),
             );
             await Future.delayed(const Duration(milliseconds: 500));
-            Navigator.of(context).pushReplacement(
+            Navigator.of(currentContext).pushReplacement(
               MaterialPageRoute(builder: (context) => const ReceiptScreen()),
             );
           }
@@ -131,9 +228,9 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         final status = e.response?.statusCode;
         final serverMsg = e.response?.data?.toString() ?? '';
         if (status == 401) {
-          await AuthService().logout(context);
           if (mounted) {
-            Navigator.of(context).pushReplacement(
+            await AuthService().logout(currentContext);
+            Navigator.of(currentContext).pushReplacement(
               MaterialPageRoute(builder: (context) => const LoginScreen()),
             );
           }
@@ -268,7 +365,12 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
   final accessToken = await storage.read(key: 'access_token');
   final prefs = await SharedPreferences.getInstance();
   final selectedAccount = prefs.getInt('selectedAccountId');
-  final Map<String, dynamic> decodedToken = JwtDecoder.decode(accessToken!);
+
+  if (accessToken == null) {
+    return {'Error': '401 Unauthorized - Access token not found'};
+  }
+
+  final Map<String, dynamic> decodedToken = JwtDecoder.decode(accessToken);
   final int userId = decodedToken['user_id'];
   final dio = Dio();
   final payload = {
@@ -304,6 +406,15 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
     "top_p": 1
   };
   final githubToken = await getGithubToken();
+
+  // Проверяем наличие GitHub токена
+  if (githubToken == null || githubToken.isEmpty) {
+    return {
+      'Error':
+          'GitHub API токен не настроен. Перейдите в настройки и добавьте токен GitHub.'
+    };
+  }
+
   try {
     final response = await dio.post(
       'https://models.github.ai/inference/chat/completions',
@@ -326,7 +437,13 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
     }
     if (result is Map<String, dynamic>) {
       if (!result.containsKey('account') || result['account'] == null) {
-        result['account'] = selectedAccount;
+        if (selectedAccount != null) {
+          result['account'] = selectedAccount;
+        } else {
+          return {
+            'Error': 'Account not selected. Please select an account first.'
+          };
+        }
       }
       if (!result.containsKey('user') || result['user'] == null) {
         result['user'] = userId;
@@ -335,8 +452,54 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
     return result;
   } catch (e) {
     if (e is DioException) {
-      return {'Error': e.response?.data?.toString() ?? e.toString()};
+      final statusCode = e.response?.statusCode;
+      final responseData = e.response?.data;
+
+      // Обработка ошибок GitHub API
+      if (statusCode == 401) {
+        return {
+          'Error':
+              'GitHub API токен недействителен или просрочен. Обновите токен в настройках.'
+        };
+      } else if (statusCode == 403) {
+        return {
+          'Error':
+              'Доступ к GitHub API запрещен. Проверьте права доступа токена.'
+        };
+      } else if (statusCode == 429) {
+        return {
+          'Error': 'Превышен лимит запросов к GitHub API. Попробуйте позже.'
+        };
+      } else if (statusCode == 500 || statusCode == 502 || statusCode == 503) {
+        return {'Error': 'Ошибка сервера GitHub API. Попробуйте позже.'};
+      } else if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        return {
+          'Error':
+              'Таймаут подключения к GitHub API. Проверьте интернет-соединение.'
+        };
+      } else if (e.type == DioExceptionType.connectionError) {
+        return {
+          'Error':
+              'Ошибка подключения к GitHub API. Проверьте интернет-соединение.'
+        };
+      }
+
+      // Если есть данные ответа, пытаемся извлечь сообщение об ошибке
+      if (responseData != null) {
+        if (responseData is Map) {
+          final errorMessage = responseData['error']?['message'] ??
+              responseData['message'] ??
+              responseData.toString();
+          return {'Error': 'Ошибка GitHub API: $errorMessage'};
+        } else {
+          return {'Error': 'Ошибка GitHub API: ${responseData.toString()}'};
+        }
+      }
+
+      return {'Error': 'Ошибка GitHub API: ${e.message ?? e.toString()}'};
     }
-    return {'Error': e.toString()};
+    return {'Error': 'Неожиданная ошибка: ${e.toString()}'};
   }
 }
