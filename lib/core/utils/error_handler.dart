@@ -8,7 +8,7 @@ class ErrorHandler {
     if (error is DioException) {
       switch (error.response?.statusCode) {
         case 401:
-          return AppConstants.unauthorized;
+          return AppConstants.sessionExpired;
         case 400:
           final data = error.response?.data;
           if (data is Map && data['detail'] != null) {
@@ -24,6 +24,15 @@ class ErrorHandler {
       }
     }
 
+    // Проверяем на ошибки сессии в тексте ошибки
+    final errorString = error.toString().toLowerCase();
+    if (errorString.contains('сессия истекла') ||
+        errorString.contains('session expired') ||
+        errorString.contains('token expired') ||
+        errorString.contains('unauthorized')) {
+      return AppConstants.sessionExpired;
+    }
+
     if (error.toString().contains('Необходимо указать адрес сервера')) {
       return AppConstants.serverAddressRequired;
     }
@@ -36,7 +45,7 @@ class ErrorHandler {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: AppTheme.errorColor,
+          backgroundColor: AppTheme.errorRed,
           duration: AppConstants.snackBarDuration,
         ),
       );
@@ -48,10 +57,58 @@ class ErrorHandler {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: AppTheme.primaryColor,
+          backgroundColor: AppTheme.primaryGreen,
           duration: AppConstants.snackBarDuration,
         ),
       );
     }
+  }
+
+  static void showSessionExpiredDialog(BuildContext context) {
+    if (!context.mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(AppConstants.sessionExpiredTitle),
+          content: Text(AppConstants.sessionExpired),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                  '/login',
+                  (route) => false,
+                );
+              },
+              child: Text(AppConstants.sessionExpiredAction),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static void showSessionExpiredSnackBar(BuildContext context) {
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(AppConstants.sessionExpired),
+        backgroundColor: AppTheme.errorRed,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: AppConstants.sessionExpiredAction,
+          onPressed: () {
+            Navigator.of(context).pushNamedAndRemoveUntil(
+              '/login',
+              (route) => false,
+            );
+          },
+        ),
+      ),
+    );
   }
 }

@@ -19,10 +19,13 @@ class AppConstants {
   // Error Messages
   static const String serverAddressRequired =
       'Необходимо указать адрес сервера в настройках';
-  static const String sessionExpired = 'Сессия истекла, войдите заново';
+  static const String sessionExpired =
+      'Ваша сессия в приложении истекла, пожалуйста, войдите снова';
+  static const String sessionExpiredTitle = 'Сессия истекла';
   static const String unauthorized = 'Неавторизованный доступ';
   static const String networkError = 'Ошибка сети';
   static const String unknownError = 'Неизвестная ошибка';
+  static const String sessionExpiredAction = 'Войти снова';
 
   // UI Constants
   static const double defaultPadding = 16.0;

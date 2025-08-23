@@ -58,6 +58,7 @@ class ApiService {
   Future<String> createReceipt(Map<String, dynamic> jsonData) async {
     try {
       final baseUrl = await _baseUrl;
+
       final response = await _dio.post(
         '$baseUrl/receipts/create-receipt/',
         data: jsonData,
@@ -67,7 +68,7 @@ class ApiService {
           },
         ),
       );
-      if (response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return 'Чек успешно добавлен!';
       } else {
         if (response.data != null) {
@@ -121,6 +122,33 @@ class ApiService {
         throw Exception("Failed to load accounts");
       }
     } catch (e) {
+      if (e is DioException) {
+        // Если это ошибка авторизации, пробрасываем её как есть
+        if (e.response?.statusCode == 401) {
+          throw e;
+        }
+
+        // Для других ошибок формируем понятное сообщение
+        if (e.response?.data != null) {
+          final data = e.response?.data;
+          if (data is Map && data['detail'] != null) {
+            throw Exception(data['detail'].toString());
+          }
+          throw Exception(data.toString());
+        }
+
+        // Обработка сетевых ошибок
+        if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout) {
+          throw Exception('Превышено время ожидания соединения');
+        }
+
+        if (e.type == DioExceptionType.connectionError) {
+          throw Exception('Ошибка подключения к серверу');
+        }
+      }
+
       throw Exception("Error: $e");
     }
   }

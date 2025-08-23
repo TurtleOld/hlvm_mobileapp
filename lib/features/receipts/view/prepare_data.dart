@@ -5,13 +5,27 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'parser_json.dart';
 
 class PrepareData {
-  double _convertSum(dynamic number) {
-    if (number is String) {
-      return int.parse(number) / 100;
-    } else if (number is int || number is double) {
-      return number / 100;
+  int _ensureInt(dynamic value) {
+    if (value is int) {
+      return value;
+    } else if (value is String) {
+      return double.parse(value).toInt();
+    } else if (value is double) {
+      return value.toInt();
     } else {
-      throw ArgumentError('Unsupported type for conversion: $number');
+      throw ArgumentError('Cannot convert $value to int');
+    }
+  }
+
+  double _ensureDouble(dynamic value) {
+    if (value is double) {
+      return value;
+    } else if (value is int) {
+      return value.toDouble();
+    } else if (value is String) {
+      return double.parse(value);
+    } else {
+      throw ArgumentError('Cannot convert $value to double');
     }
   }
 
@@ -22,7 +36,7 @@ class PrepareData {
     final prefs = await SharedPreferences.getInstance();
     final selectedAccount = prefs.getInt('selectedAccountId');
     final Map<String, dynamic> decodedToken = JwtDecoder.decode(accessToken!);
-    final int userId = decodedToken['user_id'];
+    final int userId = _ensureInt(decodedToken['user_id']);
     // Get seller information
     final nameSeller = ParserJson.searchKey(jsonData, 'user');
     final retailPlaceAddress =
@@ -41,13 +55,15 @@ class PrepareData {
     for (var item in items) {
       final name = ParserJson.searchKey(item, 'name');
       final amount =
-          _convertSum(ParserJson.searchKey(item, 'sum', defaultValue: 0));
-      final quantity = ParserJson.searchKey(item, 'quantity', defaultValue: 0);
+          _ensureDouble(ParserJson.searchKey(item, 'sum', defaultValue: 0));
+      final quantity = _ensureDouble(
+          ParserJson.searchKey(item, 'quantity', defaultValue: 0));
       final price =
-          _convertSum(ParserJson.searchKey(item, 'price', defaultValue: 0));
-      final ndsType = ParserJson.searchKey(item, 'nds', defaultValue: 0);
+          _ensureDouble(ParserJson.searchKey(item, 'price', defaultValue: 0));
+      final ndsType =
+          _ensureInt(ParserJson.searchKey(item, 'nds', defaultValue: 0));
       final ndsNum =
-          _convertSum(ParserJson.searchKey(item, 'ndsSum', defaultValue: 0));
+          _ensureDouble(ParserJson.searchKey(item, 'ndsSum', defaultValue: 0));
       products.add({
         'user': userId,
         'product_name': name,
@@ -60,19 +76,21 @@ class PrepareData {
     }
 
     final receiptDate = ParserJson.searchKey(jsonData, 'dateTime');
-    final numberReceipt =
-        ParserJson.searchKey(jsonData, 'fiscalDocumentNumber', defaultValue: 0);
+    final numberReceipt = _ensureInt(ParserJson.searchKey(
+        jsonData, 'fiscalDocumentNumber',
+        defaultValue: 0));
     final nds10 =
-        _convertSum(ParserJson.searchKey(jsonData, 'nds10', defaultValue: 0));
+        _ensureDouble(ParserJson.searchKey(jsonData, 'nds10', defaultValue: 0));
     final nds20 =
-        _convertSum(ParserJson.searchKey(jsonData, 'nds20', defaultValue: 0));
-    final totalSum = _convertSum(
+        _ensureDouble(ParserJson.searchKey(jsonData, 'nds20', defaultValue: 0));
+    final totalSum = _ensureDouble(
         ParserJson.searchKey(jsonData, 'totalSum', defaultValue: 0));
-    final operationType =
-        ParserJson.searchKey(jsonData, 'operationType', defaultValue: 0);
-    return {
+    final operationType = _ensureInt(
+        ParserJson.searchKey(jsonData, 'operationType', defaultValue: 0));
+
+    final result = {
       'user': userId,
-      'finance_account': selectedAccount,
+      'finance_account': selectedAccount ?? 0,
       'receipt_date': receiptDate,
       'number_receipt': numberReceipt,
       'nds10': nds10,
@@ -82,5 +100,7 @@ class PrepareData {
       'seller': seller,
       'product': products,
     };
+
+    return result;
   }
 }

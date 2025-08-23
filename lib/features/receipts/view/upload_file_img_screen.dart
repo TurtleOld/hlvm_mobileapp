@@ -7,11 +7,64 @@ import 'package:hlvm_mobileapp/services/api.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:hlvm_mobileapp/services/authentication.dart';
-import 'package:hlvm_mobileapp/features/auth/view/authentication_screen.dart';
+import 'package:hlvm_mobileapp/core/services/session_manager.dart';
+import 'package:hlvm_mobileapp/core/services/session_provider.dart';
 import 'package:hlvm_mobileapp/features/auth/view/settings_screen.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/receipts_screen.dart';
 import 'package:hlvm_mobileapp/main.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:hlvm_mobileapp/core/theme/app_theme.dart';
+import 'package:hlvm_mobileapp/core/utils/logger.dart';
+import 'package:hlvm_mobileapp/core/utils/error_handler.dart';
+
+// Функция для логирования в файл
+Future<void> logToFile(String message) async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final logFile = File('${directory.path}/receipt_processing.log');
+
+    final timestamp = DateTime.now().toIso8601String();
+    final logEntry = '[$timestamp] $message\n';
+
+    await logFile.writeAsString(logEntry, mode: FileMode.append);
+  } catch (e) {
+    AppLogger.error('Ошибка записи в лог', e);
+  }
+}
+
+// Функция для очистки лог файла
+Future<void> clearLogFile() async {
+  try {
+    final directory = await getApplicationDocumentsDirectory();
+    final logFile = File('${directory.path}/receipt_processing.log');
+
+    if (await logFile.exists()) {
+      await logFile.delete();
+      AppLogger.info('Лог файл очищен');
+    }
+  } catch (e) {
+    AppLogger.error('Ошибка очистки лог файла', e);
+  }
+}
+
+/// Fallback метод для выхода из аккаунта когда SessionManager недоступен
+Future<void> _handleLogoutFallback(BuildContext context) async {
+  try {
+    const storage = FlutterSecureStorage();
+    await storage.delete(key: 'access_token');
+    await storage.delete(key: 'refresh_token');
+    await storage.delete(key: 'isLoggedIn');
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Сессия истекла. Войдите снова.')),
+      );
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
+  } catch (e) {
+    AppLogger.error('Ошибка при fallback выходе из аккаунта', e);
+  }
+}
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({super.key});
@@ -20,13 +73,67 @@ class ImageCaptureScreen extends StatefulWidget {
   State<ImageCaptureScreen> createState() => _ImageCaptureScreenState();
 }
 
-class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
+class _ImageCaptureScreenState extends State<ImageCaptureScreen>
+    with TickerProviderStateMixin {
   final ApiService _apiService = ApiService();
   final String _responseDataUrl = '';
   String? _dataUrl;
   bool _isLoading = false;
+  late AnimationController _animationController;
+  late AnimationController _pulseController;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _pulseAnimation;
 
   final ImagePicker _picker = ImagePicker();
+
+  @override
+  void initState() {
+    super.initState();
+    // SessionManager будет получен из контекста при необходимости
+    _animationController = AnimationController(
+      duration: AppStyles.defaultAnimationDuration,
+      vsync: this,
+    );
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    ));
+
+    _scaleAnimation = Tween<double>(
+      begin: 0.8,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.elasticOut,
+    ));
+
+    _pulseAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.1,
+    ).animate(CurvedAnimation(
+      parent: _pulseController,
+      curve: Curves.easeInOut,
+    ));
+
+    _animationController.forward();
+    _pulseController.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _pulseController.dispose();
+    super.dispose();
+  }
 
   Future<void> _captureImage(ImageSource source) async {
     setState(() {
@@ -37,31 +144,41 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     final currentContext = context;
 
     // Проверяем аутентификацию перед началом обработки
-    final storage = const FlutterSecureStorage();
-    final accessToken = await storage.read(key: 'access_token');
-    if (accessToken == null) {
-      if (mounted) {
-        await AuthService().logout(currentContext);
-        ScaffoldMessenger.of(currentContext).showSnackBar(
-          const SnackBar(content: Text('Сессия истекла, войдите заново')),
-        );
-        await Future.delayed(const Duration(milliseconds: 500));
-        Navigator.of(currentContext).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
+    if (!SessionProvider.hasSessionProvider(currentContext)) {
+      // Если SessionProvider недоступен, используем прямую проверку
+      final storage = const FlutterSecureStorage();
+      final accessToken = await storage.read(key: 'access_token');
+      if (accessToken == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(currentContext).showSnackBar(
+            const SnackBar(content: Text('Сессия истекла. Войдите снова.')),
+          );
+          Navigator.of(currentContext)
+              .pushNamedAndRemoveUntil('/login', (route) => false);
+        }
+        setState(() {
+          _isLoading = false;
+        });
+        return;
       }
-      setState(() {
-        _isLoading = false;
-      });
-      return;
+    } else {
+      final sessionManager = SessionProvider.maybeOf(currentContext);
+      if (sessionManager == null ||
+          !await sessionManager.checkAuthenticationWithUI(currentContext)) {
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
     }
 
     final prefs = await SharedPreferences.getInstance();
     final selectedAccount = prefs.getInt('selectedAccountId');
-    if (selectedAccount == null) {
+
+    if (selectedAccount == null || selectedAccount == 0) {
       if (mounted) {
         ScaffoldMessenger.of(currentContext).showSnackBar(
-          const SnackBar(content: Text('Сначала выберите финансовый аккаунт')),
+          const SnackBar(content: Text('Сначала выберите финансовый счет')),
         );
       }
       setState(() {
@@ -75,20 +192,9 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     if (githubToken == null || githubToken.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(currentContext).showSnackBar(
-          SnackBar(
-            content: const Text(
+          const SnackBar(
+            content: Text(
                 'GitHub API токен не настроен. Перейдите в настройки и добавьте токен GitHub.'),
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: 'Настройки',
-              onPressed: () {
-                Navigator.of(currentContext).push(
-                  MaterialPageRoute(
-                    builder: (context) => const SettingsScreen(),
-                  ),
-                );
-              },
-            ),
           ),
         );
       }
@@ -101,6 +207,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
     try {
       final XFile? image = await _picker.pickImage(source: source);
       if (!mounted) return;
+
       if (image != null) {
         final String dataUrl = await getImageDataUrl(image.path, 'jpg');
         if (!mounted) return;
@@ -111,6 +218,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
 
         final Map<String, dynamic> jsonData = await getJsonReceipt(dataUrl);
         if (!mounted) return;
+
         if (jsonData.containsKey('Error')) {
           final errorStr = jsonData['Error'].toString();
 
@@ -119,14 +227,15 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
               (errorStr.contains('Access token not found') ||
                   errorStr.contains('Unauthorized'))) {
             if (mounted) {
-              await AuthService().logout(currentContext);
-              ScaffoldMessenger.of(currentContext).showSnackBar(
-                const SnackBar(content: Text('Сессия истекла, войдите заново')),
-              );
-              await Future.delayed(const Duration(milliseconds: 500));
-              Navigator.of(currentContext).pushReplacement(
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
-              );
+              if (SessionProvider.hasSessionProvider(currentContext)) {
+                final sessionManager = SessionProvider.maybeOf(currentContext);
+                if (sessionManager != null) {
+                  await sessionManager.logoutOnSessionExpired(currentContext);
+                }
+              } else {
+                // Fallback: прямой выход из аккаунта
+                await _handleLogoutFallback(currentContext);
+              }
             }
             setState(() {
               _isLoading = false;
@@ -171,10 +280,11 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         }
 
         try {
-          final createReceipt = await _apiService.createReceipt(jsonData);
+          await _apiService.createReceipt(jsonData);
+
           if (mounted) {
             ScaffoldMessenger.of(currentContext).showSnackBar(
-              SnackBar(content: Text(createReceipt)),
+              const SnackBar(content: Text('Чек был успешно загружен')),
             );
             await Future.delayed(const Duration(milliseconds: 500));
             Navigator.of(currentContext).pushAndRemoveUntil(
@@ -184,19 +294,31 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
             );
           }
         } catch (e) {
+          await logToFile('❌ [_captureImage] Ошибка при создании чека: $e');
+          await logToFile(
+              '🔍 [_captureImage] Данные, отправленные на сервер: $jsonData');
           String errorMsg = 'Ошибка при добавлении чека: $e';
           if (e is DioException) {
+            await logToFile(
+                '🔍 [_captureImage] DioException при создании чека: ${e.type}');
+            await logToFile(
+                '🔍 [_captureImage] DioException статус: ${e.response?.statusCode}');
+            await logToFile(
+                '🔍 [_captureImage] DioException данные: ${e.response?.data}');
+
             if (e.response?.statusCode == 401) {
+              await logToFile(
+                  '❌ [_captureImage] Ошибка авторизации при создании чека');
               if (mounted) {
-                await AuthService().logout(currentContext);
-                ScaffoldMessenger.of(currentContext).showSnackBar(
-                  const SnackBar(
-                      content: Text('Сессия истекла, войдите заново')),
-                );
-                await Future.delayed(const Duration(milliseconds: 500));
-                Navigator.of(currentContext).pushReplacement(
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                );
+                if (SessionProvider.hasSessionProvider(currentContext)) {
+                  final sessionManager =
+                      SessionProvider.maybeOf(currentContext);
+                  if (sessionManager != null) {
+                    await sessionManager.logoutOnSessionExpired(currentContext);
+                  }
+                } else {
+                  await _handleLogoutFallback(currentContext);
+                }
               }
               setState(() {
                 _isLoading = false;
@@ -205,6 +327,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
             }
             if (e.response?.statusCode == 400) {
               final data = e.response?.data;
+              await logToFile('🔍 [_captureImage] Данные ошибки 400: $data');
               if (data is Map && data['detail'] != null) {
                 errorMsg = data['detail'].toString();
               } else if (data != null) {
@@ -224,15 +347,22 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
         }
       }
     } catch (e) {
+      await logToFile('❌ [_captureImage] Общая ошибка: $e');
       if (e is DioException) {
         final status = e.response?.statusCode;
         final serverMsg = e.response?.data?.toString() ?? '';
+
         if (status == 401) {
+          await logToFile('❌ [_captureImage] Ошибка авторизации в общем блоке');
           if (mounted) {
-            await AuthService().logout(currentContext);
-            Navigator.of(currentContext).pushReplacement(
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
-            );
+            if (SessionProvider.hasSessionProvider(currentContext)) {
+              final sessionManager = SessionProvider.maybeOf(currentContext);
+              if (sessionManager != null) {
+                await sessionManager.logoutOnSessionExpired(currentContext);
+              }
+            } else {
+              await _handleLogoutFallback(currentContext);
+            }
           }
           return;
         } else if (status == 400) {
@@ -243,6 +373,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
           } else if (data != null) {
             detailMsg = data.toString();
           }
+          await logToFile('🔍 [_captureImage] Детали ошибки 400: $detailMsg');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Ошибка запроса: $detailMsg')),
@@ -272,35 +403,428 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
         title: const Text('Обработка фото чека'),
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: () async {
+              try {
+                final directory = await getApplicationDocumentsDirectory();
+                final logFile =
+                    File('${directory.path}/receipt_processing.log');
+
+                if (await logFile.exists()) {
+                  final logContent = await logFile.readAsString();
+                  if (mounted) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Логи обработки'),
+                        content: SingleChildScrollView(
+                          child: SelectableText(logContent),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('Закрыть'),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              await clearLogFile();
+                              if (mounted) {
+                                Navigator.of(context).pop();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Логи очищены')),
+                                );
+                              }
+                            },
+                            child: const Text('Очистить'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                } else {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Лог файл не найден')),
+                    );
+                  }
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Ошибка чтения логов: $e')),
+                  );
+                }
+              }
+            },
+            tooltip: 'Просмотр логов',
+          ),
+        ],
       ),
-      body: Center(
-        child: _isLoading
-            ? const CircularProgressIndicator()
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+      body: _isLoading ? _buildLoadingScreen() : _buildMainContent(),
+    );
+  }
+
+  Widget _buildLoadingScreen() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppStyles.balanceCardGradient,
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedBuilder(
+              animation: _pulseAnimation,
+              builder: (context, child) {
+                return Transform.scale(
+                  scale: _pulseAnimation.value,
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.receipt_long,
+                      size: 60,
+                      color: Colors.white,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 32),
+            const Text(
+              'Обрабатываем чек...',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Пожалуйста, подождите',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 32),
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              strokeWidth: 3,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainContent() {
+    return AnimatedBuilder(
+      animation: _fadeAnimation,
+      builder: (context, child) {
+        return FadeTransition(
+          opacity: _fadeAnimation,
+          child: ScaleTransition(
+            scale: _scaleAnimation,
+            child: SingleChildScrollView(
+              padding: AppStyles.defaultPadding,
+              child: Column(
                 children: [
                   const SizedBox(height: 20),
-                  if (_dataUrl != null)
-                    Text(
-                      _responseDataUrl,
-                      style: const TextStyle(fontSize: 12, color: Colors.green),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 3,
-                    ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: () => _captureImage(ImageSource.camera),
-                    child: const Text('Сделать фото'),
-                  ),
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () => _captureImage(ImageSource.gallery),
-                    child: const Text('Выбрать из галереи'),
-                  ),
+                  _buildHeaderSection(),
+                  const SizedBox(height: 40),
+                  _buildActionButtons(),
+                  const SizedBox(height: 40),
+                  _buildInfoSection(),
+                  if (_dataUrl != null) ...[
+                    const SizedBox(height: 20),
+                    _buildDataUrlSection(),
+                  ],
                 ],
               ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHeaderSection() {
+    return Container(
+      padding: AppStyles.cardPadding,
+      decoration: BoxDecoration(
+        gradient: AppStyles.balanceCardGradient,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: AppStyles.cardShadow,
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.receipt_long,
+              size: 40,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Загрузка чека',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Сфотографируйте или выберите чек для автоматической обработки',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.white70,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Column(
+      children: [
+        _buildActionButton(
+          icon: Icons.camera_alt,
+          title: 'Сделать фото',
+          subtitle: 'Сфотографировать чек',
+          onTap: () => _captureImage(ImageSource.camera),
+          gradient: AppStyles.balanceCardGradient,
+        ),
+        const SizedBox(height: 16),
+        _buildActionButton(
+          icon: Icons.photo_library,
+          title: 'Выбрать из галереи',
+          subtitle: 'Выбрать существующее фото',
+          onTap: () => _captureImage(ImageSource.gallery),
+          gradient: AppStyles.successCardGradient,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    required LinearGradient gradient,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: gradient,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppStyles.buttonShadow,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white70,
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoSection() {
+    return Container(
+      padding: AppStyles.cardPadding,
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppStyles.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.info_outline,
+                  color: AppTheme.primaryGreen,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Советы по фотографированию',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildTipItem(
+            icon: Icons.light_mode,
+            text: 'Обеспечьте хорошее освещение',
+          ),
+          _buildTipItem(
+            icon: Icons.crop_free,
+            text: 'Чек должен полностью помещаться в кадр',
+          ),
+          _buildTipItem(
+            icon: Icons.straighten,
+            text: 'Держите камеру ровно и параллельно чеку',
+          ),
+          _buildTipItem(
+            icon: Icons.visibility,
+            text: 'Убедитесь, что текст четко читается',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTipItem({required IconData icon, required String text}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: AppTheme.primaryGreen,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataUrlSection() {
+    return Container(
+      padding: AppStyles.cardPadding,
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppTheme.primaryGreen.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.check_circle,
+                color: AppTheme.successGreen,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Изображение загружено',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.successGreen,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _responseDataUrl,
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppTheme.textSecondary,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 3,
+          ),
+        ],
       ),
     );
   }
@@ -321,7 +845,9 @@ Future<String> getImageDataUrl(String imagePath, String imageFormat) async {
     String base64Image = base64Encode(imageBytes);
 
     // Формирование строки Data URL
-    return "data:image/$imageFormat;base64,$base64Image";
+    String dataUrl = "data:image/$imageFormat;base64,$base64Image";
+
+    return dataUrl;
   } catch (e) {
     rethrow;
   }
@@ -329,12 +855,15 @@ Future<String> getImageDataUrl(String imagePath, String imageFormat) async {
 
 Future<String?> getGithubToken() async {
   final prefs = await SharedPreferences.getInstance();
-  return prefs.getString('github_token');
+  final token = prefs.getString('github_token');
+
+  return token;
 }
 
 // Функция для преобразования даты в ISO 8601
 String? convertToIsoDate(String? dateStr) {
   if (dateStr == null) return null;
+
   try {
     // Пробуем распарсить "12.06.2023 18:28"
     final parts = dateStr.split(' ');
@@ -348,14 +877,17 @@ String? convertToIsoDate(String? dateStr) {
         final hour = int.parse(timeParts[0]);
         final minute = int.parse(timeParts[1]);
         final second = timeParts.length > 2 ? int.parse(timeParts[2]) : 0;
+
         final dt = DateTime(year, month, day, hour, minute, second);
-        return dt.toIso8601String();
+        final isoString = dt.toIso8601String();
+        return isoString;
       }
     }
+
     // Если уже ISO, возвращаем как есть
     DateTime.parse(dateStr);
     return dateStr;
-  } catch (_) {
+  } catch (e) {
     return dateStr; // если не получилось, возвращаем как есть
   }
 }
@@ -367,11 +899,19 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
   final selectedAccount = prefs.getInt('selectedAccountId');
 
   if (accessToken == null) {
+    await logToFile('❌ [getJsonReceipt] Ошибка: Access token не найден');
     return {'Error': '401 Unauthorized - Access token not found'};
   }
 
   final Map<String, dynamic> decodedToken = JwtDecoder.decode(accessToken);
-  final int userId = decodedToken['user_id'];
+
+  final int userId;
+  if (decodedToken['user_id'] is String) {
+    userId = int.parse(decodedToken['user_id']);
+  } else {
+    userId = decodedToken['user_id'];
+  }
+
   final dio = Dio();
   final payload = {
     "messages": [
@@ -405,10 +945,12 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
     "temperature": 0.6,
     "top_p": 1
   };
+
   final githubToken = await getGithubToken();
 
   // Проверяем наличие GitHub токена
   if (githubToken == null || githubToken.isEmpty) {
+    await logToFile('❌ [getJsonReceipt] Ошибка: GitHub API токен не настроен');
     return {
       'Error':
           'GitHub API токен не настроен. Перейдите в настройки и добавьте токен GitHub.'
@@ -426,34 +968,108 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
       ),
       data: payload,
     );
+
     String rawResponse = response.data['choices'][0]['message']['content'];
+    await logToFile('🔍 [getJsonReceipt] Сырой ответ от ИИ: $rawResponse');
+
     String cleanedResponse =
         rawResponse.replaceAll('```json', '').replaceAll('```', '').trim();
+
     final result = jsonDecode(cleanedResponse);
+    await logToFile('🔍 [getJsonReceipt] Парсированный JSON: $result');
+
     // Автоматически преобразуем дату в ISO 8601, если нужно
     if (result is Map<String, dynamic> && result.containsKey('receipt_date')) {
       result['receipt_date'] =
           convertToIsoDate(result['receipt_date']?.toString());
     }
+
     if (result is Map<String, dynamic>) {
-      if (!result.containsKey('account') || result['account'] == null) {
-        if (selectedAccount != null) {
-          result['account'] = selectedAccount;
-        } else {
-          return {
-            'Error': 'Account not selected. Please select an account first.'
-          };
-        }
+      // Проверяем наличие обязательных полей
+      if (result['total_sum'] == null) {
+        await logToFile('❌ [getJsonReceipt] Ошибка: отсутствует total_sum');
+        return {'Error': 'Missing required data: total_sum'};
       }
-      if (!result.containsKey('user') || result['user'] == null) {
-        result['user'] = userId;
+
+      if (result['items'] == null || result['items'].isEmpty) {
+        await logToFile(
+            '❌ [getJsonReceipt] Ошибка: отсутствуют items или массив пуст');
+        return {'Error': 'Missing required data: items'};
       }
+
+      if (result['receipt_date'] == null) {
+        await logToFile('❌ [getJsonReceipt] Ошибка: отсутствует receipt_date');
+        return {'Error': 'Missing required data: receipt_date'};
+      }
+
+      // Преобразуем структуру данных для соответствия ожиданиям сервера
+
+      // Создаем объект seller
+      final seller = {
+        'user': userId,
+        'name_seller': result['name_seller'],
+        'retail_place_address': result['retail_place_address'],
+        'retail_place': result['retail_place'],
+      };
+
+      // Преобразуем items в product
+      final List<Map<String, dynamic>> products = [];
+      for (var item in result['items']) {
+        products.add({
+          'user': userId,
+          'product_name': item['product_name'],
+          'category': item['category'],
+          'price': item['price'] is String
+              ? double.parse(item['price'])
+              : item['price'],
+          'quantity': item['quantity'] is String
+              ? double.parse(item['quantity'])
+              : item['quantity'],
+          'amount': item['amount'] is String
+              ? double.parse(item['amount'])
+              : item['amount'],
+        });
+      }
+
+      // Создаем финальную структуру данных
+      final Map<String, dynamic> finalData = {
+        'user': userId,
+        'finance_account': selectedAccount ?? 0,
+        'receipt_date': result['receipt_date'],
+        'number_receipt': result['number_receipt'] is String
+            ? int.parse(result['number_receipt'])
+            : result['number_receipt'],
+        'nds10': result['nds10'] is String
+            ? double.parse(result['nds10'])
+            : result['nds10'],
+        'nds20': result['nds20'] is String
+            ? double.parse(result['nds20'])
+            : result['nds20'],
+        'operation_type': result['operation_type'] is String
+            ? int.parse(result['operation_type'])
+            : result['operation_type'],
+        'total_sum': result['total_sum'] is String
+            ? double.parse(result['total_sum'])
+            : result['total_sum'],
+        'seller': seller,
+        'product': products,
+      };
+
+      await logToFile(
+          '🔍 [getJsonReceipt] Финальная структура данных: $finalData');
+
+      return finalData;
     }
+
     return result;
   } catch (e) {
+    await logToFile('❌ [getJsonReceipt] Ошибка при обработке: $e');
     if (e is DioException) {
       final statusCode = e.response?.statusCode;
       final responseData = e.response?.data;
+
+      await logToFile(
+          '🔍 [getJsonReceipt] DioException - статус: $statusCode, данные: $responseData');
 
       // Обработка ошибок GitHub API
       if (statusCode == 401) {

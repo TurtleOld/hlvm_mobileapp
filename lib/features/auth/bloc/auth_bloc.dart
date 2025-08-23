@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
 import 'package:hlvm_mobileapp/core/bloc/talker_bloc.dart';
+import 'package:hlvm_mobileapp/core/utils/global_error_handler.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
@@ -42,8 +43,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthError(message: errorMessage));
       }
     } catch (e) {
-      _talkerBloc.add(ShowErrorEvent(message: 'Ошибка авторизации', error: e));
-      emit(AuthError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+      _talkerBloc.add(ShowErrorEvent(message: errorMessage, error: e));
+      emit(AuthError(message: errorMessage));
     }
   }
 
@@ -59,8 +61,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           .add(ShowSuccessEvent(message: 'Вы успешно вышли из аккаунта'));
       emit(AuthUnauthenticated());
     } catch (e) {
-      _talkerBloc.add(ShowErrorEvent(message: 'Ошибка при выходе', error: e));
-      emit(AuthError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+      _talkerBloc.add(ShowErrorEvent(message: errorMessage, error: e));
+      emit(AuthError(message: errorMessage));
     }
   }
 
@@ -80,11 +83,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthUnauthenticated());
       }
     } catch (e) {
-      // При ошибках проверки статуса не выходим из аккаунта автоматически
-      // Пользователь может быть в офлайн режиме
-      _talkerBloc.add(
-          ShowWarningEvent(message: 'Ошибка проверки статуса авторизации'));
-      emit(AuthUnauthenticated());
+      // Проверяем, является ли это ошибкой сессии
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        final errorMessage = GlobalErrorHandler.handleBlocError(e);
+        _talkerBloc.add(ShowErrorEvent(message: errorMessage, error: e));
+        emit(AuthUnauthenticated());
+      } else {
+        // При других ошибках проверки статуса не выходим из аккаунта автоматически
+        // Пользователь может быть в офлайн режиме
+        _talkerBloc.add(
+            ShowWarningEvent(message: 'Ошибка проверки статуса авторизации'));
+        emit(AuthUnauthenticated());
+      }
     }
   }
 

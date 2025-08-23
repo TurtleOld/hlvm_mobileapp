@@ -111,7 +111,7 @@ class TalkerService {
     // Ошибки авторизации
     if (error.toString().contains('401') ||
         error.toString().contains('Unauthorized')) {
-      return 'Сессия истекла. Войдите в систему заново.';
+      return 'Ваша сессия в приложении истекла, пожалуйста, войдите снова';
     }
 
     // Ошибки сервера

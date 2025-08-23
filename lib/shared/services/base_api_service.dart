@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/utils/request_deduplicator.dart';
 
 abstract class BaseApiService {
   final Dio _dio = Dio();
@@ -11,6 +12,9 @@ abstract class BaseApiService {
   }
 
   void _setupInterceptors() {
+    // Добавляем interceptor для дедупликации запросов
+    _dio.interceptors.add(RequestDeduplicationInterceptor());
+
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -69,7 +73,8 @@ abstract class BaseApiService {
       await _prefs.setString(AppConstants.accessTokenKey, newAccessToken);
     } catch (e) {
       await _clearTokens();
-      throw Exception(AppConstants.sessionExpired);
+      throw Exception(
+          "Ваша сессия в приложении истекла, пожалуйста, войдите снова");
     }
   }
 

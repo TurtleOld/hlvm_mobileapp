@@ -15,6 +15,9 @@ import 'package:hlvm_mobileapp/features/receipts/bloc/bloc.dart';
 import 'package:hlvm_mobileapp/core/services/talker_service.dart';
 import 'package:hlvm_mobileapp/core/bloc/talker_bloc.dart';
 import 'package:hlvm_mobileapp/core/widgets/talker_notification_widget.dart';
+import 'package:hlvm_mobileapp/core/utils/global_error_handler.dart';
+import 'package:hlvm_mobileapp/core/services/session_manager.dart';
+import 'package:hlvm_mobileapp/core/services/session_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,9 +28,16 @@ void main() async {
 
   final bool isLoggedIn = await checkLoggedIn();
   await dotenv.load(fileName: ".env");
+
+  final authService = AuthService();
+  final sessionManager = SessionManager(authService: authService);
+  GlobalErrorHandler.setupDioErrorHandler(authService.dio);
+
   runApp(MyApp(
     isLoggedIn: isLoggedIn,
     talkerService: talkerService,
+    authService: authService,
+    sessionManager: sessionManager,
   ));
 }
 
@@ -42,11 +52,15 @@ Future<bool> checkLoggedIn() async {
 class MyApp extends StatefulWidget {
   final bool isLoggedIn;
   final TalkerService talkerService;
+  final AuthService authService;
+  final SessionManager sessionManager;
 
   const MyApp({
     super.key,
     required this.isLoggedIn,
     required this.talkerService,
+    required this.authService,
+    required this.sessionManager,
   });
 
   @override
@@ -65,7 +79,7 @@ class _MyAppState extends State<MyApp> {
         ),
         BlocProvider<AuthBloc>(
           create: (context) => AuthBloc(
-            authService: AuthService(),
+            authService: widget.authService,
             talkerBloc: context.read<TalkerBloc>(),
           )..add(CheckAuthStatus()),
         ),
@@ -82,23 +96,26 @@ class _MyAppState extends State<MyApp> {
           ),
         ),
       ],
-      child: MaterialApp(
-        theme: AppTheme.lightTheme,
-        home: widget.isLoggedIn ? const HomePage() : const LoginScreen(),
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/home': (context) => const HomePage(),
-          '/uploadFile': (context) => const FileReaderScreen(),
-          '/image_capture': (context) => const ImageCaptureScreen(),
-        },
-        builder: (context, child) {
-          return Stack(
-            children: [
-              child!,
-              const TalkerNotificationWidget(),
-            ],
-          );
-        },
+      child: SessionProvider(
+        sessionManager: widget.sessionManager,
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: widget.isLoggedIn ? const HomePage() : const LoginScreen(),
+          routes: {
+            '/login': (context) => const LoginScreen(),
+            '/home': (context) => const HomePage(),
+            '/uploadFile': (context) => const FileReaderScreen(),
+            '/image_capture': (context) => ImageCaptureScreen(),
+          },
+          builder: (context, child) {
+            return Stack(
+              children: [
+                child!,
+                const TalkerNotificationWidget(),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

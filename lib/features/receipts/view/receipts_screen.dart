@@ -4,6 +4,7 @@ import 'package:hlvm_mobileapp/features/receipts/view/view.dart';
 import 'package:hlvm_mobileapp/services/api.dart';
 import 'package:intl/intl.dart';
 import 'package:hlvm_mobileapp/features/auth/view/settings_screen.dart';
+import 'package:hlvm_mobileapp/core/theme/app_theme.dart';
 
 class ReceiptScreen extends StatefulWidget {
   const ReceiptScreen({super.key});
@@ -12,15 +13,37 @@ class ReceiptScreen extends StatefulWidget {
   State<ReceiptScreen> createState() => _ReceiptScreenState();
 }
 
-class _ReceiptScreenState extends State<ReceiptScreen> {
+class _ReceiptScreenState extends State<ReceiptScreen>
+    with TickerProviderStateMixin {
   final ApiService _apiService = ApiService();
   List<Map<String, dynamic>> _receiptsWithSellers = [];
   bool _isLoading = true;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: AppStyles.defaultAnimationDuration,
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    ));
+
     _fetchReceipt();
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchReceipt() async {
@@ -74,6 +97,15 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
   void _showReceiptDetailsDialog(
       BuildContext context, Map<String, dynamic> receipt, String seller) {
     final totalSum = receipt['total_sum'];
+
+    // Отладочная информация
+    print('🔍 [DEBUG] Receipt data: $receipt');
+    print('🔍 [DEBUG] Products: ${receipt['product']}');
+    print('🔍 [DEBUG] Products type: ${receipt['product']?.runtimeType}');
+    print('🔍 [DEBUG] Products length: ${receipt['product']?.length}');
+    if (receipt['product'] != null && receipt['product'].isNotEmpty) {
+      print('🔍 [DEBUG] First product: ${receipt['product'][0]}');
+    }
     final dateString = receipt['receipt_date'];
     DateTime dateTime = DateTime.parse(dateString);
     String formattedDate = DateFormat('dd.MM.yyyy HH:mm').format(dateTime);
@@ -82,44 +114,102 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(
-            seller,
-            style: GoogleFonts.montserrat(fontSize: 13),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.receipt_long,
+                  color: AppTheme.primaryGreen,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  seller,
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "Дата: $formattedDate",
-                  style: GoogleFonts.montserrat(fontSize: 11),
+                _buildDetailItem(
+                  icon: Icons.calendar_today,
+                  label: 'Дата',
+                  value: formattedDate,
                 ),
-                Text(
-                  "Сумма чека: $totalSum",
-                  style: GoogleFonts.montserrat(fontSize: 11),
+                _buildDetailItem(
+                  icon: Icons.attach_money,
+                  label: 'Сумма чека',
+                  value: '$totalSum ₽',
+                  isAmount: true,
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  "Товары:",
-                  style: GoogleFonts.montserrat(
-                      fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-                ..._buildItemList(receipt['product']),
-                // Добавляем список товаров
+                if (receipt['number_receipt'] != null)
+                  _buildDetailItem(
+                    icon: Icons.numbers,
+                    label: 'Номер ФД',
+                    value: receipt['number_receipt'].toString(),
+                  ),
+                if (receipt['nds10'] != null &&
+                    (receipt['nds10'] is num
+                        ? receipt['nds10'] > 0
+                        : (double.tryParse(receipt['nds10'].toString()) ?? 0) >
+                            0))
+                  _buildDetailItem(
+                    icon: Icons.receipt,
+                    label: 'НДС 10%',
+                    value: '${receipt['nds10']} ₽',
+                  ),
+                if (receipt['nds20'] != null &&
+                    (receipt['nds20'] is num
+                        ? receipt['nds20'] > 0
+                        : (double.tryParse(receipt['nds20'].toString()) ?? 0) >
+                            0))
+                  _buildDetailItem(
+                    icon: Icons.receipt,
+                    label: 'НДС 20%',
+                    value: '${receipt['nds20']} ₽',
+                  ),
+                if (receipt['product'] != null &&
+                    receipt['product'].isNotEmpty) ...[
+                  _buildDetailItem(
+                    icon: Icons.inventory,
+                    label: 'Товары',
+                    value: '${receipt['product'].length} позиций',
+                  ),
+                  ...receipt['product']
+                      .map<Widget>((product) => _buildDetailItem(
+                            icon: Icons.shopping_cart,
+                            label: product['product_name'] ?? 'Товар',
+                            value:
+                                '${product['quantity']} x ${product['price']} ₽ = ${product['amount']} ₽',
+                            isAmount: true,
+                          ))
+                      .toList(),
+                ],
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: Text(
-                "Закрыть",
-                style:
-                    GoogleFonts.montserrat(color: Colors.green, fontSize: 14),
-              ),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Закрыть'),
             ),
           ],
         );
@@ -127,107 +217,404 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
     );
   }
 
-  List<Widget> _buildItemList(List<dynamic> items) {
-    return items.map((item) {
-      return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  item['product_name'],
-                  style: GoogleFonts.montserrat(fontSize: 11),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+  Widget _buildDetailItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    bool isAmount = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: AppTheme.primaryGreen,
+              size: 16,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-              Text(
-                "${item['quantity']} x ${item['price']}",
-                style: GoogleFonts.montserrat(fontSize: 11),
-              ),
-            ],
-          ));
-    }).toList();
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: isAmount ? FontWeight.bold : FontWeight.w500,
+                    color:
+                        isAmount ? AppTheme.primaryGreen : AppTheme.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
-        title: const Text(
-          'Чеки',
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.green,
-        centerTitle: true,
+        title: const Text('Мои чеки'),
+        elevation: 0,
         actions: [
           IconButton(
-            onPressed: () {
-              Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const FileReaderScreen()));
-            },
-            icon: Icon(
-              Icons.upload_file_rounded,
-              color: Colors.white,
-            ),
-          ),
-          IconButton(
-            onPressed: () {
-              Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const ImageCaptureScreen()));
-            },
-            icon: Icon(
-              Icons.photo_camera_back,
-              color: Colors.white,
-            ),
+            onPressed: _isLoading ? null : _fetchReceipt,
+            icon: _isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Icon(Icons.refresh),
+            tooltip: 'Обновить',
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _fetchReceipt,
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : ListView.builder(
-                itemCount: _receiptsWithSellers.length,
-                itemBuilder: (context, index) {
-                  final receiptData = _receiptsWithSellers[index];
-                  final receipt = receiptData['receipt'];
-                  final seller = receiptData['seller']['name_seller'];
-                  final totalSum = receipt['total_sum'];
-                  final dateString = receipt['receipt_date'];
-                  DateTime dateTime = DateTime.parse(dateString);
-                  String formattedDate =
-                      DateFormat('dd.MM.yyyy HH:mm').format(dateTime);
+      body: _isLoading ? _buildLoadingScreen() : _buildReceiptsList(),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => ImageCaptureScreen(),
+            ),
+          );
+        },
+        icon: const Icon(Icons.add_a_photo),
+        label: const Text('Добавить чек'),
+        backgroundColor: AppTheme.primaryGreen,
+      ),
+    );
+  }
 
-                  return Card(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 8.0,
-                    ),
-                    child: InkWell(
-                      onTap: () {
-                        _showReceiptDetailsDialog(context, receipt, seller);
-                      },
-                      child: ListTile(
-                        textColor: Colors.green,
-                        title: Text(
-                          seller,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.montserrat(
-                              fontSize: 13, fontWeight: FontWeight.w700),
+  Widget _buildLoadingScreen() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.receipt_long,
+              size: 40,
+              color: AppTheme.primaryGreen,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Загружаем чеки...',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryGreen),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReceiptsList() {
+    if (_receiptsWithSellers.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return AnimatedBuilder(
+      animation: _fadeAnimation,
+      builder: (context, child) {
+        return FadeTransition(
+          opacity: _fadeAnimation,
+          child: RefreshIndicator(
+            onRefresh: _fetchReceipt,
+            color: AppTheme.primaryGreen,
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _receiptsWithSellers.length,
+              itemBuilder: (context, index) {
+                final receiptData = _receiptsWithSellers[index];
+                final receipt = receiptData['receipt'];
+                final seller = receiptData['seller']['name_seller'] ??
+                    'Неизвестный продавец';
+
+                return _buildReceiptCard(receipt, seller, index);
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.receipt_long,
+              size: 60,
+              color: AppTheme.primaryGreen,
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Чеков пока нет',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Добавьте первый чек, чтобы начать вести учет',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => ImageCaptureScreen(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.add_a_photo),
+            label: const Text('Добавить чек'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReceiptCard(
+      Map<String, dynamic> receipt, String seller, int index) {
+    final totalSum = receipt['total_sum'];
+    final dateString = receipt['receipt_date'];
+    DateTime dateTime = DateTime.parse(dateString);
+    String formattedDate = DateFormat('dd.MM.yyyy').format(dateTime);
+    String formattedTime = DateFormat('HH:mm').format(dateTime);
+
+    // Анимация появления карточек
+    final animationDelay = Duration(milliseconds: index * 100);
+
+    return TweenAnimationBuilder<double>(
+      duration: AppStyles.defaultAnimationDuration + animationDelay,
+      tween: Tween(begin: 0.0, end: 1.0),
+      builder: (context, value, child) {
+        return Transform.translate(
+          offset: Offset(0, 20 * (1 - value)),
+          child: Opacity(
+            opacity: value,
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: AppStyles.cardShadow,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => _showReceiptDetailsDialog(context, receipt, seller),
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          gradient: AppStyles.balanceCardGradient,
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        subtitle: Text(
-                          "Дата: $formattedDate Сумма чека: $totalSum",
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.montserrat(
-                              fontSize: 11, fontWeight: FontWeight.w600),
+                        child: const Icon(
+                          Icons.receipt_long,
+                          color: Colors.white,
+                          size: 24,
                         ),
                       ),
-                    ),
-                  );
-                },
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              seller,
+                              style: GoogleFonts.inter(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.calendar_today,
+                                  size: 14,
+                                  color: AppTheme.textSecondary,
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    formattedDate,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  Icons.access_time,
+                                  size: 14,
+                                  color: AppTheme.textSecondary,
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    formattedTime,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '$totalSum ₽',
+                            style: GoogleFonts.inter(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryGreen,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  AppTheme.primaryGreen.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'Чек',
+                              style: GoogleFonts.inter(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primaryGreen,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          height: 1,
+                          color: AppTheme.dividerColor,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.touch_app,
+                        size: 16,
+                        color: AppTheme.textSecondary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Нажмите для подробностей',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          height: 1,
+                          color: AppTheme.dividerColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
+            ),
+          ),
+        ),
       ),
     );
   }

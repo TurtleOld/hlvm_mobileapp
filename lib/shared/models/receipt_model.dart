@@ -50,13 +50,13 @@ class ReceiptProduct extends BaseModel {
 
   final String name;
   final double price;
-  final int quantity;
+  final double quantity;
 
   factory ReceiptProduct.fromJson(Map<String, dynamic> json) {
     return ReceiptProduct(
       name: json['product_name'] ?? '',
       price: (json['price'] ?? 0).toDouble(),
-      quantity: json['quantity'] ?? 1,
+      quantity: (json['quantity'] ?? 1).toDouble(),
     );
   }
 

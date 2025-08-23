@@ -1,6 +1,8 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import '../../../services/api.dart';
 import '../../../core/bloc/talker_bloc.dart';
+import '../../../core/utils/global_error_handler.dart';
 import 'receipt_event.dart';
 import 'receipt_state.dart';
 
@@ -14,11 +16,13 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
   })  : _apiService = apiService,
         _talkerBloc = talkerBloc,
         super(ReceiptInitial()) {
-    on<LoadReceipts>(_onLoadReceipts);
-    on<RefreshReceipts>(_onRefreshReceipts);
-    on<UploadReceiptFromJson>(_onUploadReceiptFromJson);
-    on<UploadReceiptFromImage>(_onUploadReceiptFromImage);
-    on<GetSellerInfo>(_onGetSellerInfo);
+    on<LoadReceipts>(_onLoadReceipts, transformer: droppable());
+    on<RefreshReceipts>(_onRefreshReceipts, transformer: droppable());
+    on<UploadReceiptFromJson>(_onUploadReceiptFromJson,
+        transformer: droppable());
+    on<UploadReceiptFromImage>(_onUploadReceiptFromImage,
+        transformer: droppable());
+    on<GetSellerInfo>(_onGetSellerInfo, transformer: droppable());
   }
 
   Future<void> _onLoadReceipts(
@@ -31,9 +35,21 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
       final receipts = await _apiService.listReceipt();
       emit(ReceiptsLoaded(receipts: receipts));
     } catch (e) {
-      _talkerBloc
-          .add(ShowErrorEvent(message: 'Ошибка загрузки чеков', error: e));
-      emit(ReceiptError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Сессия истекла. Пожалуйста, войдите снова.',
+          error: e,
+        ));
+        emit(ReceiptSessionExpired());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Ошибка загрузки чеков: $errorMessage',
+          error: e,
+        ));
+        emit(ReceiptError(message: errorMessage));
+      }
     }
   }
 
@@ -45,9 +61,21 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
       final receipts = await _apiService.listReceipt();
       emit(ReceiptsLoaded(receipts: receipts));
     } catch (e) {
-      _talkerBloc
-          .add(ShowErrorEvent(message: 'Ошибка обновления чеков', error: e));
-      emit(ReceiptError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Сессия истекла. Пожалуйста, войдите снова.',
+          error: e,
+        ));
+        emit(ReceiptSessionExpired());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Ошибка обновления чеков: $errorMessage',
+          error: e,
+        ));
+        emit(ReceiptError(message: errorMessage));
+      }
     }
   }
 
@@ -71,9 +99,21 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
         emit(ReceiptUploadSuccess(message: result));
       }
     } catch (e) {
-      _talkerBloc
-          .add(ShowErrorEvent(message: 'Ошибка загрузки чека', error: e));
-      emit(ReceiptError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Сессия истекла. Пожалуйста, войдите снова.',
+          error: e,
+        ));
+        emit(ReceiptSessionExpired());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Ошибка загрузки чека: $errorMessage',
+          error: e,
+        ));
+        emit(ReceiptError(message: errorMessage));
+      }
     }
   }
 
@@ -90,9 +130,21 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
           .add(ShowSuccessEvent(message: 'Изображение успешно обработано'));
       emit(ReceiptUploadSuccess(message: 'Изображение успешно обработано'));
     } catch (e) {
-      _talkerBloc.add(
-          ShowErrorEvent(message: 'Ошибка обработки изображения', error: e));
-      emit(ReceiptError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Сессия истекла. Пожалуйста, войдите снова.',
+          error: e,
+        ));
+        emit(ReceiptSessionExpired());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Ошибка обработки изображения: $errorMessage',
+          error: e,
+        ));
+        emit(ReceiptError(message: errorMessage));
+      }
     }
   }
 
@@ -106,9 +158,21 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
       final sellerInfo = await _apiService.getSeller(event.sellerId);
       emit(SellerInfoLoaded(sellerInfo: sellerInfo));
     } catch (e) {
-      _talkerBloc.add(ShowErrorEvent(
-          message: 'Ошибка получения информации о продавце', error: e));
-      emit(ReceiptError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Сессия истекла. Пожалуйста, войдите снова.',
+          error: e,
+        ));
+        emit(ReceiptSessionExpired());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Ошибка получения информации о продавце: $errorMessage',
+          error: e,
+        ));
+        emit(ReceiptError(message: errorMessage));
+      }
     }
   }
 }

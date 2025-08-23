@@ -25,13 +25,24 @@ class AuthService {
         onError: (error, handler) async {
           if (error.response?.statusCode == 401) {
             try {
+              // Пытаемся обновить токен
               await refreshToken();
               final newAccessToken = await getAccessToken();
-              error.requestOptions.headers['Authorization'] =
-                  'Bearer $newAccessToken';
-              final cloneReq = await _dio.fetch(error.requestOptions);
-              return handler.resolve(cloneReq);
+
+              if (newAccessToken != null) {
+                // Повторяем запрос с новым токеном
+                error.requestOptions.headers['Authorization'] =
+                    'Bearer $newAccessToken';
+                final cloneReq = await _dio.fetch(error.requestOptions);
+                return handler.resolve(cloneReq);
+              } else {
+                // Если не удалось получить новый токен, очищаем все и возвращаем ошибку
+                await _clearTokens();
+                return handler.reject(error);
+              }
             } catch (e) {
+              // Если обновление токена не удалось, очищаем все и возвращаем ошибку
+              await _clearTokens();
               return handler.reject(error);
             }
           }
@@ -122,7 +133,8 @@ class AuthService {
         // Если это ошибка 401 (неверный refresh token), то выходим из аккаунта
         if (e.response?.statusCode == 401) {
           await _clearTokens();
-          throw Exception("Сессия истекла, войдите заново");
+          throw Exception(
+              "Ваша сессия в приложении истекла, пожалуйста, войдите снова");
         }
 
         // Для других ошибок (сеть, сервер) не выходим из аккаунта
@@ -149,15 +161,10 @@ class AuthService {
     await _secureStorage.delete(key: 'isLoggedIn');
   }
 
-  Future<void> logout([BuildContext? context]) async {
+  Future<void> logout() async {
     await _secureStorage.delete(key: 'access_token');
     await _secureStorage.delete(key: 'refresh_token');
     await _secureStorage.delete(key: 'isLoggedIn');
-    if (context != null && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Вы успешно вышли из аккаунта')),
-      );
-    }
   }
 
   Future<String?> getCurrentUsername() async {

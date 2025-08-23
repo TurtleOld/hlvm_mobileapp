@@ -30,6 +30,8 @@ class FinanceAccountError extends FinanceAccountState {
   List<Object?> get props => [message];
 }
 
+class FinanceAccountSessionExpired extends FinanceAccountState {}
+
 class FinanceAccountOperationSuccess extends FinanceAccountState {
   final String message;
   final List<FinanceAccount> accounts;

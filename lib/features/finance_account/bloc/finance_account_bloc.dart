@@ -1,6 +1,8 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import '../../../services/api.dart';
 import '../../../core/bloc/talker_bloc.dart';
+import '../../../core/utils/global_error_handler.dart';
 import 'finance_account_event.dart';
 import 'finance_account_state.dart';
 
@@ -15,11 +17,12 @@ class FinanceAccountBloc
   })  : _apiService = apiService,
         _talkerBloc = talkerBloc,
         super(FinanceAccountInitial()) {
-    on<LoadFinanceAccounts>(_onLoadFinanceAccounts);
-    on<RefreshFinanceAccounts>(_onRefreshFinanceAccounts);
-    on<AddFinanceAccount>(_onAddFinanceAccount);
-    on<UpdateFinanceAccount>(_onUpdateFinanceAccount);
-    on<DeleteFinanceAccount>(_onDeleteFinanceAccount);
+    on<LoadFinanceAccounts>(_onLoadFinanceAccounts, transformer: droppable());
+    on<RefreshFinanceAccounts>(_onRefreshFinanceAccounts,
+        transformer: droppable());
+    on<AddFinanceAccount>(_onAddFinanceAccount, transformer: droppable());
+    on<UpdateFinanceAccount>(_onUpdateFinanceAccount, transformer: droppable());
+    on<DeleteFinanceAccount>(_onDeleteFinanceAccount, transformer: droppable());
   }
 
   Future<void> _onLoadFinanceAccounts(
@@ -32,9 +35,22 @@ class FinanceAccountBloc
       final accounts = await _apiService.fetchFinanceAccount();
       emit(FinanceAccountLoaded(accounts: accounts));
     } catch (e) {
-      _talkerBloc
-          .add(ShowErrorEvent(message: 'Ошибка загрузки счетов', error: e));
-      emit(FinanceAccountError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+
+      // Если это ошибка сессии, показываем специальное сообщение
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Сессия истекла. Пожалуйста, войдите снова.',
+          error: e,
+        ));
+        emit(FinanceAccountSessionExpired());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Ошибка загрузки счетов: $errorMessage',
+          error: e,
+        ));
+        emit(FinanceAccountError(message: errorMessage));
+      }
     }
   }
 
@@ -46,9 +62,21 @@ class FinanceAccountBloc
       final accounts = await _apiService.fetchFinanceAccount();
       emit(FinanceAccountLoaded(accounts: accounts));
     } catch (e) {
-      _talkerBloc
-          .add(ShowErrorEvent(message: 'Ошибка обновления счетов', error: e));
-      emit(FinanceAccountError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Сессия истекла. Пожалуйста, войдите снова.',
+          error: e,
+        ));
+        emit(FinanceAccountSessionExpired());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Ошибка обновления счетов: $errorMessage',
+          error: e,
+        ));
+        emit(FinanceAccountError(message: errorMessage));
+      }
     }
   }
 
@@ -76,9 +104,21 @@ class FinanceAccountBloc
         accounts: accounts,
       ));
     } catch (e) {
-      _talkerBloc
-          .add(ShowErrorEvent(message: 'Ошибка создания счета', error: e));
-      emit(FinanceAccountError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Сессия истекла. Пожалуйста, войдите снова.',
+          error: e,
+        ));
+        emit(FinanceAccountSessionExpired());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Ошибка создания счета: $errorMessage',
+          error: e,
+        ));
+        emit(FinanceAccountError(message: errorMessage));
+      }
     }
   }
 
@@ -100,9 +140,21 @@ class FinanceAccountBloc
         accounts: accounts,
       ));
     } catch (e) {
-      _talkerBloc
-          .add(ShowErrorEvent(message: 'Ошибка обновления счета', error: e));
-      emit(FinanceAccountError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Сессия истекла. Пожалуйста, войдите снова.',
+          error: e,
+        ));
+        emit(FinanceAccountSessionExpired());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Ошибка обновления счета: $errorMessage',
+          error: e,
+        ));
+        emit(FinanceAccountError(message: errorMessage));
+      }
     }
   }
 
@@ -124,9 +176,21 @@ class FinanceAccountBloc
         accounts: accounts,
       ));
     } catch (e) {
-      _talkerBloc
-          .add(ShowErrorEvent(message: 'Ошибка удаления счета', error: e));
-      emit(FinanceAccountError(message: e.toString()));
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Сессия истекла. Пожалуйста, войдите снова.',
+          error: e,
+        ));
+        emit(FinanceAccountSessionExpired());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Ошибка удаления счета: $errorMessage',
+          error: e,
+        ));
+        emit(FinanceAccountError(message: errorMessage));
+      }
     }
   }
 }

@@ -38,6 +38,8 @@ class SellerInfoLoaded extends ReceiptState {
   List<Object?> get props => [sellerInfo];
 }
 
+class ReceiptSessionExpired extends ReceiptState {}
+
 class ReceiptError extends ReceiptState {
   final String message;
 
