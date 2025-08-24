@@ -3,18 +3,22 @@ import 'package:bloc_concurrency/bloc_concurrency.dart';
 import '../../../services/api.dart';
 import '../../../core/bloc/talker_bloc.dart';
 import '../../../core/utils/global_error_handler.dart';
+import '../../../core/services/cache_service.dart';
 import 'receipt_event.dart';
 import 'receipt_state.dart';
 
 class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
   final ApiService _apiService;
   final TalkerBloc _talkerBloc;
+  final CacheService _cacheService;
 
   ReceiptBloc({
     required ApiService apiService,
     required TalkerBloc talkerBloc,
+    required CacheService cacheService,
   })  : _apiService = apiService,
         _talkerBloc = talkerBloc,
+        _cacheService = cacheService,
         super(ReceiptInitial()) {
     on<LoadReceipts>(_onLoadReceipts, transformer: droppable());
     on<RefreshReceipts>(_onRefreshReceipts, transformer: droppable());
@@ -32,7 +36,19 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
     emit(ReceiptLoading());
 
     try {
+      // Сначала пытаемся загрузить из кеша
+      final cachedReceipts = await _cacheService.getCachedReceipts();
+      if (cachedReceipts != null) {
+        emit(ReceiptsLoaded(receipts: cachedReceipts));
+        _talkerBloc.add(ShowSuccessEvent(message: 'Данные загружены из кеша'));
+      }
+
+      // Затем загружаем свежие данные с сервера
       final receipts = await _apiService.listReceipt();
+
+      // Кешируем новые данные
+      await _cacheService.cacheReceipts(receipts);
+
       emit(ReceiptsLoaded(receipts: receipts));
     } catch (e) {
       final errorMessage = GlobalErrorHandler.handleBlocError(e);
@@ -59,6 +75,10 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
   ) async {
     try {
       final receipts = await _apiService.listReceipt();
+
+      // Обновляем кеш при принудительном обновлении
+      await _cacheService.cacheReceipts(receipts);
+
       emit(ReceiptsLoaded(receipts: receipts));
     } catch (e) {
       final errorMessage = GlobalErrorHandler.handleBlocError(e);
@@ -155,7 +175,21 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
     emit(ReceiptLoading());
 
     try {
+      // Сначала пытаемся загрузить из кеша
+      final cachedSellerInfo =
+          await _cacheService.getCachedSellerInfo(event.sellerId);
+      if (cachedSellerInfo != null) {
+        emit(SellerInfoLoaded(sellerInfo: cachedSellerInfo));
+        _talkerBloc.add(ShowSuccessEvent(
+            message: 'Информация о продавце загружена из кеша'));
+      }
+
+      // Затем загружаем свежие данные с сервера
       final sellerInfo = await _apiService.getSeller(event.sellerId);
+
+      // Кешируем новые данные
+      await _cacheService.cacheSellerInfo(event.sellerId, sellerInfo);
+
       emit(SellerInfoLoaded(sellerInfo: sellerInfo));
     } catch (e) {
       final errorMessage = GlobalErrorHandler.handleBlocError(e);

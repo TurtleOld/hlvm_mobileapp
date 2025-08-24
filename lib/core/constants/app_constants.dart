@@ -2,6 +2,10 @@ class AppConstants {
   static const String appName = 'HLVM Mobile App';
   static const String appVersion = '1.0.0';
 
+  // API Configuration
+  static const String defaultApiBaseUrl = 'https://api.example.com';
+  static const int defaultApiTimeout = 30000;
+
   // API Endpoints
   static const String authTokenEndpoint = '/auth/token/';
   static const String authRefreshEndpoint = '/auth/token/refresh/';

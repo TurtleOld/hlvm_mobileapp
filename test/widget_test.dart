@@ -9,11 +9,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hlvm_mobileapp/main.dart';
 import 'package:hlvm_mobileapp/core/services/talker_service.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
+import 'package:hlvm_mobileapp/core/services/cache_service.dart';
+import 'package:hlvm_mobileapp/core/services/session_manager.dart';
+import 'package:hlvm_mobileapp/core/services/security_manager_service.dart';
 
 void main() {
   final talkerService = TalkerService();
   talkerService.initialize();
   final authService = AuthService();
+  final cacheService = CacheService();
+  final sessionManager = SessionManager(authService: authService);
+  final securityManager = SecurityManagerService();
 
   testWidgets('App should show login screen when not logged in',
       (WidgetTester tester) async {
@@ -21,6 +27,9 @@ void main() {
       isLoggedIn: false,
       talkerService: talkerService,
       authService: authService,
+      sessionManager: sessionManager,
+      cacheService: cacheService,
+      securityManager: securityManager,
     ));
 
     expect(find.text('Авторизация'), findsOneWidget);
@@ -34,6 +43,9 @@ void main() {
       isLoggedIn: true,
       talkerService: talkerService,
       authService: authService,
+      sessionManager: sessionManager,
+      cacheService: cacheService,
+      securityManager: securityManager,
     ));
 
     expect(find.text('Счета'), findsOneWidget);

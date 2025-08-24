@@ -3,8 +3,18 @@ name: Build Flutter Android APK
 on:
   push:
     branches: [main]
+    paths:
+      - 'pubspec.yaml'
+      - 'android/**'
+      - 'lib/**'
+      - 'assets/**'
   pull_request:
     branches: [main]
+    paths:
+      - 'pubspec.yaml'
+      - 'android/**'
+      - 'lib/**'
+      - 'assets/**'
 
 jobs:
   build:

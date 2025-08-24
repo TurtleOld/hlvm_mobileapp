@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,23 +24,19 @@ class AuthService {
         onError: (error, handler) async {
           if (error.response?.statusCode == 401) {
             try {
-              // Пытаемся обновить токен
               await refreshToken();
               final newAccessToken = await getAccessToken();
 
               if (newAccessToken != null) {
-                // Повторяем запрос с новым токеном
                 error.requestOptions.headers['Authorization'] =
                     'Bearer $newAccessToken';
                 final cloneReq = await _dio.fetch(error.requestOptions);
                 return handler.resolve(cloneReq);
               } else {
-                // Если не удалось получить новый токен, очищаем все и возвращаем ошибку
                 await _clearTokens();
                 return handler.reject(error);
               }
             } catch (e) {
-              // Если обновление токена не удалось, очищаем все и возвращаем ошибку
               await _clearTokens();
               return handler.reject(error);
             }
@@ -128,16 +123,13 @@ class AuthService {
       final newAccessToken = response.data['access'];
       await _secureStorage.write(key: 'access_token', value: newAccessToken);
     } catch (e) {
-      // Проверяем, является ли ошибка критической
       if (e is DioException) {
-        // Если это ошибка 401 (неверный refresh token), то выходим из аккаунта
         if (e.response?.statusCode == 401) {
           await _clearTokens();
           throw Exception(
               "Ваша сессия в приложении истекла, пожалуйста, войдите снова");
         }
 
-        // Для других ошибок (сеть, сервер) не выходим из аккаунта
         if (e.type == DioExceptionType.connectionTimeout ||
             e.type == DioExceptionType.receiveTimeout ||
             e.type == DioExceptionType.sendTimeout ||
@@ -146,7 +138,6 @@ class AuthService {
         }
       }
 
-      // Для других типов ошибок также не выходим из аккаунта
       throw Exception("Ошибка обновления токена: $e");
     }
   }
@@ -168,11 +159,8 @@ class AuthService {
   }
 
   Future<String?> getCurrentUsername() async {
-    // Можно расширить для получения имени пользователя из токена
-    // или из дополнительного хранилища
     return 'Пользователь';
   }
 
-  // Геттер для доступа к Dio instance с настроенными interceptors
   Dio get dio => _dio;
 }

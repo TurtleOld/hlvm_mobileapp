@@ -20,13 +20,13 @@ void main() {
     });
 
     test('should return session expired message for session expired text', () {
-      final error = 'Сессия истекла, войдите заново';
+      const error = 'Сессия истекла, войдите заново';
       final result = ErrorHandler.handleApiError(error);
       expect(result, equals(AppConstants.sessionExpired));
     });
 
     test('should return session expired message for unauthorized text', () {
-      final error = 'Unauthorized access';
+      const error = 'Unauthorized access';
       final result = ErrorHandler.handleApiError(error);
       expect(result, equals(AppConstants.sessionExpired));
     });

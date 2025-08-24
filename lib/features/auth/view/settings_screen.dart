@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'cache_info_widget.dart';
+import 'server_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -21,23 +23,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadServerAddress() async {
     final prefs = await SharedPreferences.getInstance();
-    final server = prefs.getString('server_address') ?? '';
-    setState(() {
-      _serverController.text = server;
-    });
+    if (mounted) {
+      setState(() {
+        _serverController.text = prefs.getString('server_address') ?? '';
+      });
+    }
   }
 
   Future<void> _saveServerAddress() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
       _message = '';
     });
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('server_address', _serverController.text.trim());
-    setState(() {
-      _isLoading = false;
-      _message = 'Сервер сохранён';
-    });
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        _message = 'Сервер сохранён';
+      });
+    }
   }
 
   @override
@@ -46,33 +55,73 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         title: const Text('Настройки'),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _serverController,
-              decoration: const InputDecoration(
-                labelText: 'Адрес сервера',
-                border: OutlineInputBorder(),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Настройки сервера',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const ServerSettingsScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.settings),
+                          label: const Text('Расширенные'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _serverController,
+                      decoration: const InputDecoration(
+                        labelText: 'Адрес сервера',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16.0),
+                    if (_message.isNotEmpty)
+                      Text(
+                        _message,
+                        style: const TextStyle(color: Colors.green),
+                      ),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _isLoading ? null : _saveServerAddress,
+                        child: _isLoading
+                            ? const CircularProgressIndicator()
+                            : const Text('Сохранить'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 16.0),
-            if (_message.isNotEmpty)
-              Text(
-                _message,
-                style: const TextStyle(color: Colors.green),
-              ),
-            ElevatedButton(
-              onPressed: _isLoading ? null : _saveServerAddress,
-              child: _isLoading
-                  ? const CircularProgressIndicator()
-                  : const Text('Сохранить'),
-            ),
+            const SizedBox(height: 16),
+            const CacheInfoWidget(),
           ],
         ),
       ),
     );
   }
-} 
+}

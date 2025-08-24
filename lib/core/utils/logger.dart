@@ -1,5 +1,13 @@
 import 'package:flutter/foundation.dart';
 
+/// Простой класс Logger для совместимости
+class Logger {
+  static void info(String message) => AppLogger.info(message);
+  static void warning(String message) => AppLogger.warning(message);
+  static void error(String message) => AppLogger.error(message);
+  static void debug(String message) => AppLogger.debug(message);
+}
+
 /// Современная утилита для логирования
 class AppLogger {
   static const String _tag = '[HLVM]';

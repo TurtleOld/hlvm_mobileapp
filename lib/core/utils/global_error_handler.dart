@@ -35,6 +35,12 @@ class GlobalErrorHandler {
 
   /// Обработка ошибок в BLoC
   static String handleBlocError(dynamic error) {
+    // Проверяем на ошибки о не настроенном сервере
+    if (error.toString().contains('Необходимо указать адрес сервера') ||
+        error.toString().contains(AppConstants.serverAddressRequired)) {
+      return AppConstants.serverAddressRequired;
+    }
+
     if (error is DioException) {
       if (error.response?.statusCode == 401) {
         return AppConstants.sessionExpired;

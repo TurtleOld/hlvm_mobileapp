@@ -5,6 +5,12 @@ import '../theme/app_theme.dart';
 
 class ErrorHandler {
   static String handleApiError(dynamic error) {
+    // Проверяем на ошибки о не настроенном сервере
+    if (error.toString().contains('Необходимо указать адрес сервера') ||
+        error.toString().contains(AppConstants.serverAddressRequired)) {
+      return AppConstants.serverAddressRequired;
+    }
+
     if (error is DioException) {
       switch (error.response?.statusCode) {
         case 401:
@@ -31,10 +37,6 @@ class ErrorHandler {
         errorString.contains('token expired') ||
         errorString.contains('unauthorized')) {
       return AppConstants.sessionExpired;
-    }
-
-    if (error.toString().contains('Необходимо указать адрес сервера')) {
-      return AppConstants.serverAddressRequired;
     }
 
     return error.toString();

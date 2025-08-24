@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:hlvm_mobileapp/models/finance_account_model.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hlvm_mobileapp/core/services/server_settings_service.dart';
 
 import 'authentication.dart';
 
 class ApiService {
   final Dio _dio = Dio();
   final AuthService _authService = AuthService();
+  final ServerSettingsService _serverSettings = ServerSettingsService();
 
   ApiService() {
     // Используем interceptor из AuthService вместо дублирования
@@ -15,20 +16,81 @@ class ApiService {
   }
 
   Future<String> get _baseUrl async {
-    final prefs = await SharedPreferences.getInstance();
-    final server = prefs.getString('server_address');
-    if (server != null && server.isNotEmpty) {
-      return server.endsWith('/api') ? server : '$server/api';
+    final serverUrl = await _serverSettings.getFullServerUrl();
+    if (serverUrl != null && serverUrl.isNotEmpty) {
+      return serverUrl;
     }
     throw Exception('Необходимо указать адрес сервера в настройках');
+  }
+
+  Future<String> get _baseServerUrl async {
+    final serverUrl = await _serverSettings.getBaseServerUrl();
+    if (serverUrl != null && serverUrl.isNotEmpty) {
+      return serverUrl;
+    }
+    throw Exception('Необходимо указать адрес сервера в настройках');
+  }
+
+  /// Проверяет доступность сервера
+  Future<bool> checkServerHealth() async {
+    try {
+      final baseUrl = await _baseServerUrl;
+      final timeout = await _serverSettings.getServerTimeout() ?? 30;
+
+      final response = await _dio.get(
+        '$baseUrl/health/',
+        options: Options(
+          sendTimeout: Duration(seconds: timeout),
+          receiveTimeout: Duration(seconds: timeout),
+        ),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Получает информацию о сервере
+  Future<Map<String, dynamic>?> getServerInfo() async {
+    try {
+      final baseUrl = await _baseServerUrl;
+      final timeout = await _serverSettings.getServerTimeout() ?? 30;
+
+      final response = await _dio.get(
+        '$baseUrl/info/',
+        options: Options(
+          sendTimeout: Duration(seconds: timeout),
+          receiveTimeout: Duration(seconds: timeout),
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        return response.data;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 
   Future<List> listReceipt() async {
     try {
       final baseUrl = await _baseUrl;
-      final response = await _dio.get(
-        '$baseUrl/receipts/list/',
+      final timeout = await _serverSettings.getServerTimeout() ?? 30;
+      final retryAttempts = await _serverSettings.getServerRetryAttempts() ?? 3;
+
+      final response = await _makeRequestWithRetry(
+        () => _dio.get(
+          '$baseUrl/receipts/list/',
+          options: Options(
+            sendTimeout: Duration(seconds: timeout),
+            receiveTimeout: Duration(seconds: timeout),
+          ),
+        ),
+        retryAttempts,
       );
+
       if (response.statusCode == 200) {
         return response.data;
       } else {
@@ -42,9 +104,20 @@ class ApiService {
   Future<Map<String, dynamic>> getSeller(int sellerId) async {
     try {
       final baseUrl = await _baseUrl;
-      final response = await _dio.get(
-        '$baseUrl/receipts/seller/$sellerId',
+      final timeout = await _serverSettings.getServerTimeout() ?? 30;
+      final retryAttempts = await _serverSettings.getServerRetryAttempts() ?? 3;
+
+      final response = await _makeRequestWithRetry(
+        () => _dio.get(
+          '$baseUrl/receipts/seller/$sellerId',
+          options: Options(
+            sendTimeout: Duration(seconds: timeout),
+            receiveTimeout: Duration(seconds: timeout),
+          ),
+        ),
+        retryAttempts,
       );
+
       if (response.statusCode == 200) {
         return response.data;
       } else {
@@ -58,16 +131,24 @@ class ApiService {
   Future<String> createReceipt(Map<String, dynamic> jsonData) async {
     try {
       final baseUrl = await _baseUrl;
+      final timeout = await _serverSettings.getServerTimeout() ?? 30;
+      final retryAttempts = await _serverSettings.getServerRetryAttempts() ?? 3;
 
-      final response = await _dio.post(
-        '$baseUrl/receipts/create-receipt/',
-        data: jsonData,
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-          },
+      final response = await _makeRequestWithRetry(
+        () => _dio.post(
+          '$baseUrl/receipts/create-receipt/',
+          data: jsonData,
+          options: Options(
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            sendTimeout: Duration(seconds: timeout),
+            receiveTimeout: Duration(seconds: timeout),
+          ),
         ),
+        retryAttempts,
       );
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         return 'Чек успешно добавлен!';
       } else {
@@ -112,9 +193,20 @@ class ApiService {
   Future<List<FinanceAccount>> fetchFinanceAccount() async {
     try {
       final baseUrl = await _baseUrl;
-      final response = await _dio.get(
-        '$baseUrl/finaccount/list/',
+      final timeout = await _serverSettings.getServerTimeout() ?? 30;
+      final retryAttempts = await _serverSettings.getServerRetryAttempts() ?? 3;
+
+      final response = await _makeRequestWithRetry(
+        () => _dio.get(
+          '$baseUrl/finaccount/list/',
+          options: Options(
+            sendTimeout: Duration(seconds: timeout),
+            receiveTimeout: Duration(seconds: timeout),
+          ),
+        ),
+        retryAttempts,
       );
+
       if (response.statusCode == 200) {
         List<dynamic> data = response.data;
         return data.map((json) => FinanceAccount.fromJson(json)).toList();
@@ -151,5 +243,42 @@ class ApiService {
 
       throw Exception("Error: $e");
     }
+  }
+
+  /// Выполняет запрос с повторными попытками
+  Future<Response> _makeRequestWithRetry(
+    Future<Response> Function() request,
+    int maxRetries,
+  ) async {
+    int attempts = 0;
+    while (attempts < maxRetries) {
+      try {
+        return await request();
+      } catch (e) {
+        attempts++;
+        if (attempts >= maxRetries) {
+          rethrow;
+        }
+
+        // Ждем перед повторной попыткой (экспоненциальная задержка)
+        await Future.delayed(Duration(seconds: attempts * 2));
+      }
+    }
+    throw Exception('Превышено максимальное количество попыток');
+  }
+
+  /// Получает текущие настройки сервера
+  Future<Map<String, dynamic>> getServerSettings() async {
+    return await _serverSettings.getAllServerSettings();
+  }
+
+  /// Проверяет, настроен ли сервер
+  Future<bool> isServerConfigured() async {
+    return await _serverSettings.isServerConfigured();
+  }
+
+  /// Валидирует настройки сервера
+  Future<bool> validateServerSettings() async {
+    return await _serverSettings.validateServerSettings();
   }
 }

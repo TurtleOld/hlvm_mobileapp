@@ -52,44 +52,56 @@ class _ReceiptScreenState extends State<ReceiptScreen>
       List<Map<String, dynamic>> receiptsData = [];
 
       for (var receipt in receipts) {
+        if (!mounted) return; // Проверяем, что виджет все еще в дереве
+
         final seller = await _apiService.getSeller(receipt['seller']);
+        if (!mounted) return; // Проверяем после каждого await
+
         receiptsData.add({
           'receipt': receipt,
           'seller': seller,
         });
       }
 
-      setState(() {
-        _receiptsWithSellers = receiptsData;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _receiptsWithSellers = receiptsData;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
 
       if (!mounted) return;
 
       final errorMsg = e.toString();
       if (errorMsg.contains('Необходимо указать адрес сервера')) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                const Text('Необходимо указать адрес сервера в настройках'),
-            action: SnackBarAction(
-              label: 'Настроить',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                      builder: (context) => const SettingsScreen()),
-                );
-              },
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  const Text('Необходимо указать адрес сервера в настройках'),
+              action: SnackBarAction(
+                label: 'Настроить',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (context) => const SettingsScreen()),
+                  );
+                },
+              ),
             ),
-          ),
-        );
+          );
+        }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Ошибка загрузки данных: $e')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Ошибка загрузки данных: $e')));
+        }
       }
     }
   }
