@@ -11,6 +11,8 @@ class AppConstants {
   static const String authRefreshEndpoint = '/auth/token/refresh/';
   static const String receiptsListEndpoint = '/receipts/list/';
   static const String receiptsCreateEndpoint = '/receipts/create-receipt/';
+  static const String receiptsParseImageEndpoint =
+      'https://models.github.ai/inference/chat/completions';
   static const String financeAccountsEndpoint = '/finaccount/list/';
 
   // Storage Keys

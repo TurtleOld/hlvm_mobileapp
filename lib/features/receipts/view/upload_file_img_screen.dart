@@ -7,13 +7,79 @@ import 'package:image_picker/image_picker.dart';
 import 'package:hlvm_mobileapp/services/api.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:hlvm_mobileapp/core/services/session_provider.dart';
+
 import 'package:hlvm_mobileapp/features/auth/view/settings_screen.dart';
 import 'package:hlvm_mobileapp/main.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:hlvm_mobileapp/core/theme/app_theme.dart';
 import 'package:hlvm_mobileapp/core/utils/logger.dart';
-import 'package:hlvm_mobileapp/core/services/server_settings_service.dart';
+import 'package:hlvm_mobileapp/core/constants/app_constants.dart';
+import 'package:hlvm_mobileapp/core/services/secure_token_storage_service.dart';
+import 'package:hlvm_mobileapp/features/receipts/view/prepare_data.dart';
+
+// Вспомогательные функции для безопасного парсинга
+int _safeParseInt(dynamic value) {
+  print(
+      'DEBUG: _safeParseInt called with: $value (type: ${value.runtimeType})');
+  if (value == null) {
+    print('DEBUG: _safeParseInt: value is null, returning 0');
+    return 0;
+  }
+  if (value is int) {
+    print('DEBUG: _safeParseInt: value is int, returning $value');
+    return value;
+  }
+  if (value is double) {
+    print(
+        'DEBUG: _safeParseInt: value is double, converting to int: ${value.toInt()}');
+    return value.toInt();
+  }
+  if (value is String) {
+    try {
+      final result = int.parse(value);
+      print('DEBUG: _safeParseInt: parsed string "$value" to int: $result');
+      return result;
+    } catch (e) {
+      print(
+          'DEBUG: _safeParseInt: failed to parse string "$value", returning 0');
+      return 0;
+    }
+  }
+  print('DEBUG: _safeParseInt: unknown type, returning 0');
+  return 0;
+}
+
+double _safeParseDouble(dynamic value) {
+  print(
+      'DEBUG: _safeParseDouble called with: $value (type: ${value.runtimeType})');
+  if (value == null) {
+    print('DEBUG: _safeParseDouble: value is null, returning 0.0');
+    return 0.0;
+  }
+  if (value is double) {
+    print('DEBUG: _safeParseDouble: value is double, returning $value');
+    return value;
+  }
+  if (value is int) {
+    print(
+        'DEBUG: _safeParseDouble: value is int, converting to double: ${value.toDouble()}');
+    return value.toDouble();
+  }
+  if (value is String) {
+    try {
+      final result = double.parse(value);
+      print(
+          'DEBUG: _safeParseDouble: parsed string "$value" to double: $result');
+      return result;
+    } catch (e) {
+      print(
+          'DEBUG: _safeParseDouble: failed to parse string "$value", returning 0.0');
+      return 0.0;
+    }
+  }
+  print('DEBUG: _safeParseDouble: unknown type, returning 0.0');
+  return 0.0;
+}
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({super.key});
@@ -57,7 +123,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
   void initState() {
     super.initState();
     try {
-      // SessionManager будет получен из контекста при необходимости
+      // Проверка аутентификации выполняется через токены
       _animationController = AnimationController(
         duration: const Duration(milliseconds: 200), // Уменьшаем время анимации
         vsync: this,
@@ -129,28 +195,16 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
       const timeoutDuration = Duration(seconds: 30);
 
       // Проверяем аутентификацию перед началом обработки
-      if (!SessionProvider.hasSessionProvider(currentContext)) {
-        // Если SessionProvider недоступен, используем прямую проверку
-        const storage = FlutterSecureStorage();
-        final accessToken = await storage.read(key: 'access_token');
-        if (accessToken == null) {
-          if (mounted) {
-            _showSessionExpiredDialog(currentContext);
-          }
-          setState(() {
-            _isLoading = false;
-          });
-          return;
+      const storage = FlutterSecureStorage();
+      final accessToken = await storage.read(key: 'access_token');
+      if (accessToken == null) {
+        if (mounted) {
+          _showSessionExpiredDialog(currentContext);
         }
-      } else {
-        final sessionManager = SessionProvider.maybeOf(currentContext);
-        if (sessionManager == null ||
-            !await sessionManager.checkAuthenticationWithUI(currentContext)) {
-          setState(() {
-            _isLoading = false;
-          });
-          return;
-        }
+        setState(() {
+          _isLoading = false;
+        });
+        return;
       }
 
       final prefs = await SharedPreferences.getInstance();
@@ -169,7 +223,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
       }
 
       // Проверяем наличие GitHub токена
-      final githubToken = await getGithubToken();
+      final secureStorage = SecureTokenStorageService();
+      final githubToken = await secureStorage.getGithubToken();
       if (githubToken == null || githubToken.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(currentContext).showSnackBar(
@@ -208,27 +263,27 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         });
 
         // Получаем JSON с таймаутом
-        final Map<String, dynamic> jsonData =
+        print('DEBUG: === STARTING getJsonReceipt ===');
+        final Map<String, dynamic> rawJsonData =
             await getJsonReceipt(dataUrl).timeout(timeoutDuration);
+        print('DEBUG: === FINISHED getJsonReceipt ===');
+        print('DEBUG: rawJsonData: $rawJsonData');
         if (!mounted) return;
 
-        if (jsonData.containsKey('Error')) {
-          final errorStr = jsonData['Error'].toString();
+        if (rawJsonData.containsKey('Error')) {
+          final errorStr = rawJsonData['Error'].toString();
 
           // Проверяем, является ли это ошибкой аутентификации к нашему серверу
           if (errorStr.contains('401') &&
               (errorStr.contains('Access token not found') ||
                   errorStr.contains('Unauthorized'))) {
             if (mounted) {
-              if (SessionProvider.hasSessionProvider(currentContext)) {
-                final sessionManager = SessionProvider.maybeOf(currentContext);
-                if (sessionManager != null) {
-                  await sessionManager.logoutOnSessionExpired(currentContext);
-                }
-              } else {
-                // Fallback: показываем диалог истечения сессии
-                _showSessionExpiredDialog(currentContext);
-              }
+              // Очищаем токены при ошибке аутентификации
+              await storage.delete(key: 'access_token');
+              await storage.delete(key: 'refresh_token');
+              await storage.delete(key: 'isLoggedIn');
+              // Fallback: показываем диалог истечения сессии
+              _showSessionExpiredDialog(currentContext);
             }
             setState(() {
               _isLoading = false;
@@ -263,7 +318,27 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
           }
           if (mounted) {
             ScaffoldMessenger.of(currentContext).showSnackBar(
-              SnackBar(content: Text('Ошибка: ${jsonData['Error']}')),
+              SnackBar(content: Text('Ошибка: ${rawJsonData['Error']}')),
+            );
+          }
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+
+        // Подготавливаем данные через PrepareData
+        print('DEBUG: Raw JSON from AI: $rawJsonData');
+        final prepareData = PrepareData();
+        Map<String, dynamic> preparedData;
+        try {
+          preparedData = await prepareData.prepareData(rawJsonData);
+          print('DEBUG: Prepared JSON for API: $preparedData');
+        } catch (e) {
+          print('DEBUG: Error preparing data: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(currentContext).showSnackBar(
+              SnackBar(content: Text('Ошибка подготовки данных: $e')),
             );
           }
           setState(() {
@@ -273,18 +348,52 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         }
 
         // Создаем чек с таймаутом
-        await _apiService.createReceipt(jsonData).timeout(timeoutDuration);
+        print('DEBUG: Sending receipt data to API');
+        print('DEBUG: Receipt data keys: ${preparedData.keys.toList()}');
+        print('DEBUG: Total sum: ${preparedData['total_sum']}');
+        print('DEBUG: Items count: ${preparedData['product']?.length ?? 0}');
+        print('DEBUG: Full JSON before API call: $preparedData');
+
+        // Проверяем обязательные поля
+        print('DEBUG: === MANDATORY FIELD CHECK ===');
+        print('DEBUG: user: ${preparedData['user']}');
+        print('DEBUG: finance_account: ${preparedData['finance_account']}');
+        print('DEBUG: seller: ${preparedData['seller']}');
+        print('DEBUG: total_sum: ${preparedData['total_sum']}');
+        print('DEBUG: receipt_date: ${preparedData['receipt_date']}');
+        print('DEBUG: number_receipt: ${preparedData['number_receipt']}');
+        print('DEBUG: nds10: ${preparedData['nds10']}');
+        print('DEBUG: nds20: ${preparedData['nds20']}');
+        print('DEBUG: operation_type: ${preparedData['operation_type']}');
+        print('DEBUG: product (items): ${preparedData['product']}');
+        print('DEBUG: === END MANDATORY FIELD CHECK ===');
+
+        final result = await _apiService
+            .createReceipt(preparedData)
+            .timeout(timeoutDuration);
+
+        print('DEBUG: API response: $result');
 
         if (mounted) {
-          ScaffoldMessenger.of(currentContext).showSnackBar(
-            const SnackBar(content: Text('Чек был успешно загружен')),
-          );
-          await Future.delayed(const Duration(milliseconds: 500));
-          Navigator.of(currentContext).pushAndRemoveUntil(
-            MaterialPageRoute(
-                builder: (context) => const HomePage(selectedIndex: 1)),
-            (route) => false,
-          );
+          if (result.contains('успешно') || result.contains('добавлен')) {
+            ScaffoldMessenger.of(currentContext).showSnackBar(
+              SnackBar(content: Text(result)),
+            );
+            await Future.delayed(const Duration(milliseconds: 500));
+            Navigator.of(currentContext).pushAndRemoveUntil(
+              MaterialPageRoute(
+                  builder: (context) => const HomePage(selectedIndex: 1)),
+              (route) => false,
+            );
+          } else {
+            // Показываем ошибку от сервера
+            ScaffoldMessenger.of(currentContext).showSnackBar(
+              SnackBar(
+                content: Text('Ошибка загрузки чека: $result'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       }
     } on TimeoutException catch (e) {
@@ -300,13 +409,40 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
       }
     } catch (e) {
       AppLogger.error('Общая ошибка в _captureImage: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Произошла ошибка: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      
+      // Проверяем специфические ошибки
+      final errorStr = e.toString();
+      if (errorStr.contains('Необходимо указать адрес сервера')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  const Text('Необходимо указать адрес сервера в настройках'),
+              action: SnackBarAction(
+                label: 'Настроить',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (context) => const SettingsScreen()),
+                  );
+                },
+              ),
+            ),
+          );
+        }
+      } else if (errorStr.contains('авторизации') || errorStr.contains('401')) {
+        if (mounted) {
+          _showSessionExpiredDialog(context);
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Произошла ошибка: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } finally {
       if (mounted) {
@@ -1088,12 +1224,7 @@ Future<String> getImageDataUrl(String imagePath, String imageFormat) async {
   }
 }
 
-Future<String?> getGithubToken() async {
-  final prefs = await SharedPreferences.getInstance();
-  final token = prefs.getString('github_token');
 
-  return token;
-}
 
 // Функция для преобразования даты в ISO 8601
 String? convertToIsoDate(String? dateStr) {
@@ -1127,107 +1258,295 @@ String? convertToIsoDate(String? dateStr) {
   }
 }
 
-Future<Map<String, dynamic>> getJsonReceipt(String imagePath) async {
+Future<Map<String, dynamic>> getJsonReceipt(String imageData) async {
+  print(
+      'DEBUG: getJsonReceipt called with imageData length: ${imageData.length}');
   try {
-    // Проверяем наличие access token
-    const storage = FlutterSecureStorage();
-    final accessToken = await storage.read(key: 'access_token');
+    // Определяем, является ли imageData путем к файлу или base64 строкой
+    bool isBase64Data = imageData.startsWith('data:image/');
+    print('DEBUG: isBase64Data: $isBase64Data');
 
-    if (accessToken == null) {
-      return {'Error': 'Access token не найден'};
+    // Создаем запрос к GitHub AI API для обработки изображения
+    final apiService = ApiService();
+
+    // Подготавливаем base64 изображение для отправки
+    String base64Image;
+    if (isBase64Data) {
+      final parts = imageData.split(',');
+      base64Image = parts[1];
+    } else {
+      // Если это путь к файлу, читаем и кодируем в base64
+      final file = File(imageData);
+      final bytes = await file.readAsBytes();
+      base64Image = base64Encode(bytes);
     }
 
-    // Проверяем настройки сервера
-    final serverSettings = ServerSettingsService();
-    final serverAddress = await serverSettings.getServerAddress();
-
-    if (serverAddress == null || serverAddress.isEmpty) {
-      return {'Error': 'Адрес сервера не настроен'};
-    }
-
-    // Проверяем GitHub API токен
-    final githubToken = await storage.read(key: 'github_token');
-
-    if (githubToken == null || githubToken.isEmpty) {
-      return {'Error': 'GitHub API токен не настроен'};
-    }
-
-    // Создаем FormData для отправки
-    final formData = FormData.fromMap({
-      'image': await MultipartFile.fromFile(imagePath),
-      'github_token': githubToken,
-    });
-
-    // Отправляем запрос к ИИ сервису
-    final response = await Dio().post(
-      '$serverAddress/api/ai/parse_receipt',
-      data: formData,
-      options: Options(
-        headers: {
-          'Authorization': 'Bearer $accessToken',
-          'Content-Type': 'multipart/form-data',
+    // Формируем запрос к GitHub AI API в соответствии с рекомендациями
+    final requestBody = {
+      "messages": [
+        {
+          "role": "system",
+          "content":
+              "Extract receipt data and return ONLY valid JSON. Structure: {\"name_seller\":\"string\",\"retail_place_address\":\"string\",\"retail_place\":\"string\",\"items\":[{\"name\":\"string\",\"price\":number,\"quantity\":number,\"category\":\"string\"}],\"total_sum\":number,\"receipt_date\":\"string\",\"number_receipt\":number,\"nds10\":number,\"nds20\":number,\"operation_type\":1}. Extract MAXIMUM 15 items to avoid token limits.\n\nCRITICAL RULES:\n1. quantity = EXACT quantity from receipt (Кол-во column)\n2. price = price per unit (цена за единицу)\n3. For weight items (вес): quantity = weight in kg, price = price per kg\n4. For regular items: quantity = number of items, price = price per item\n5. amount = quantity × price\n6. Look at 'Кол-во' column for quantity, 'Сумма' column for total amount\n7. Calculate price = amount ÷ quantity\n8. NEVER use amount as price or vice versa\n\nUse numbers, not strings. Categories: Продукты, Бытовая химия, Другое. Return ONLY JSON."
         },
-      ),
+        {
+          "role": "user",
+          "content": [
+            {
+              "text": "Extract receipt data and return ONLY valid JSON:",
+              "type": "text"
+            },
+            {
+              "image_url": {
+                "url": "data:image/jpeg;base64,$base64Image",
+                "detail": "high"
+              },
+              "type": "image_url"
+            }
+          ]
+        }
+      ],
+      "model": "openai/gpt-4o"
+    };
+
+    // Отправляем запрос к GitHub AI API используя специальный метод
+    print('DEBUG: Sending request to GitHub AI API');
+    print('DEBUG: Endpoint: ${AppConstants.receiptsParseImageEndpoint}');
+    print('DEBUG: Request body keys: ${requestBody.keys.toList()}');
+    print('DEBUG: Model: ${requestBody["model"]}');
+
+    final response = await apiService.postToGithubAI(
+      AppConstants.receiptsParseImageEndpoint,
+      requestBody,
     );
 
+    print('DEBUG: GitHub AI API response status: ${response.statusCode}');
+    print('DEBUG: GitHub AI API response data: ${response.data}');
+
     if (response.statusCode != 200) {
-      return {'Error': 'Ошибка сервера: ${response.statusCode}'};
+      print('DEBUG: Response status code: ${response.statusCode}');
+      print('DEBUG: Response data: ${response.data}');
+
+      if (response.statusCode == 401) {
+        print('DEBUG: 401 Unauthorized - Token might be invalid or expired');
+        return {'Error': 'Ошибка авторизации GitHub API. Проверьте токен.'};
+      }
+      if (response.statusCode == 404) {
+        print('DEBUG: 404 Not Found - Endpoint might be incorrect');
+        return {
+          'Error': 'GitHub AI API недоступен. Обратитесь к администратору.'
+        };
+      }
+      if (response.statusCode == 403) {
+        print(
+            'DEBUG: 403 Forbidden - Token might not have required permissions');
+        return {
+          'Error': 'Токен не имеет необходимых прав доступа к GitHub AI API.'
+        };
+      }
+      return {'Error': 'Ошибка GitHub AI API: ${response.statusCode}'};
     }
 
-    final rawResponse = response.data.toString();
-    final cleanedResponse =
-        rawResponse.replaceAll('```json', '').replaceAll('```', '').trim();
+    // Обрабатываем ответ от GitHub AI API
+    final responseData = response.data;
+    if (responseData == null ||
+        responseData['choices'] == null ||
+        responseData['choices'].isEmpty) {
+      return {'Error': 'Неверный ответ от GitHub AI API'};
+    }
 
-    final result = jsonDecode(cleanedResponse);
+    final content = responseData['choices'][0]['message']['content'];
+    if (content == null) {
+      return {'Error': 'Пустой ответ от GitHub AI API'};
+    }
+
+    // Извлекаем JSON из ответа (убираем markdown код, если есть)
+    String jsonString = content.trim();
+
+    // Убираем markdown код блоки
+    if (jsonString.startsWith('```json')) {
+      jsonString = jsonString.substring(7);
+    } else if (jsonString.startsWith('```')) {
+      jsonString = jsonString.substring(3);
+    }
+    if (jsonString.endsWith('```')) {
+      jsonString = jsonString.substring(0, jsonString.length - 3);
+    }
+    jsonString = jsonString.trim();
+
+    // Проверяем, что строка начинается с {
+    if (!jsonString.startsWith('{')) {
+      print(
+          'DEBUG: Invalid JSON response - does not start with {: $jsonString');
+      return {
+        'Error': 'AI модель вернула невалидный JSON. Попробуйте еще раз.'
+      };
+    }
+
+    // Проверяем, что строка заканчивается на }
+    if (!jsonString.endsWith('}')) {
+      print('DEBUG: JSON response does not end with }, attempting to fix...');
+      
+      // Пытаемся найти последнюю закрывающую скобку
+      int lastBraceIndex = jsonString.lastIndexOf('}');
+      if (lastBraceIndex > 0) {
+        jsonString = jsonString.substring(0, lastBraceIndex + 1);
+        print('DEBUG: Fixed JSON by truncating at position $lastBraceIndex');
+      } else {
+        print('DEBUG: Cannot find closing brace, returning error');
+        return {
+          'Error': 'AI модель вернула невалидный JSON. Попробуйте еще раз.'
+        };
+      }
+    }
+
+    // Дополнительная проверка на неполные объекты в массиве items
+    if (jsonString.contains('"items":[')) {
+      // Ищем последний полный объект в массиве items
+      int itemsStart = jsonString.indexOf('"items":[');
+      int itemsEnd = jsonString.indexOf(']', itemsStart);
+
+      if (itemsEnd > itemsStart) {
+        String itemsSection = jsonString.substring(itemsStart + 8, itemsEnd);
+        
+        // Проверяем, есть ли неполные объекты
+        if (itemsSection.contains('"name":') && !itemsSection.endsWith('}')) {
+          print('DEBUG: Found incomplete item object, attempting to fix...');
+          
+          // Ищем последний полный объект
+          int lastCompleteObject = itemsSection.lastIndexOf('},');
+          if (lastCompleteObject > 0) {
+            String fixedItemsSection =
+                itemsSection.substring(0, lastCompleteObject + 1);
+            jsonString = jsonString.replaceRange(
+                itemsStart + 8, itemsEnd, fixedItemsSection);
+            print('DEBUG: Fixed incomplete items array');
+          }
+        }
+      }
+    }
+
+    Map<String, dynamic> result;
+    try {
+      result = jsonDecode(jsonString);
+    } catch (e) {
+      print('DEBUG: JSON decode error: $e');
+      print('DEBUG: Raw response: $jsonString');
+      return {
+        'Error': 'Ошибка парсинга JSON от AI модели. Попробуйте еще раз.'
+      };
+    }
+
+    // Логируем сырой результат от AI
+    print('DEBUG: === RAW AI RESPONSE ===');
+    print('DEBUG: Raw result: $result');
+    print('DEBUG: Result keys: ${result.keys.toList()}');
+    print(
+        'DEBUG: total_sum: ${result['total_sum']} (type: ${result['total_sum']?.runtimeType})');
+    print(
+        'DEBUG: items: ${result['items']} (type: ${result['items']?.runtimeType})');
+    print(
+        'DEBUG: receipt_date: ${result['receipt_date']} (type: ${result['receipt_date']?.runtimeType})');
+    print('DEBUG: === END RAW AI RESPONSE ===');
 
     // Проверяем обязательные поля
-    if (result is Map<String, dynamic> && result.containsKey('receipt_date')) {
+    if (result.containsKey('receipt_date')) {
       result['receipt_date'] =
           convertToIsoDate(result['receipt_date']?.toString());
     }
 
     // Валидация данных
-    if (result is Map<String, dynamic>) {
-      // Проверяем total_sum
-      if (result['total_sum'] == null) {
-        return {'Error': 'Missing required data: total_sum'};
-      }
+    // Проверяем total_sum
+    if (result['total_sum'] == null) {
+      print('DEBUG: ERROR: total_sum is null');
+      return {'Error': 'Missing required data: total_sum'};
+    }
 
-      // Проверяем items
-      if (result['items'] == null || result['items'].isEmpty) {
-        return {'Error': 'Missing required data: items'};
-      }
+    // Проверяем items
+    if (result['items'] == null || result['items'].isEmpty) {
+      print('DEBUG: ERROR: items is null or empty: ${result['items']}');
+      return {'Error': 'Missing required data: items'};
+    }
 
-      // Проверяем receipt_date
-      if (result['receipt_date'] == null) {
-        return {'Error': 'Missing required data: receipt_date'};
-      }
+    // Проверяем receipt_date
+    if (result['receipt_date'] == null) {
+      print('DEBUG: ERROR: receipt_date is null');
+      return {'Error': 'Missing required data: receipt_date'};
+    }
 
-      // Формируем результат
+    // Формируем результат с безопасным преобразованием типов
+    final finalResult = {
+      'name_seller': result['name_seller']?.toString() ?? '',
+      'retail_place_address': result['retail_place_address']?.toString() ?? '',
+      'retail_place': result['retail_place']?.toString() ?? '',
+      'product': result['items'] ?? [],
+      'total_sum': _safeParseDouble(result['total_sum']),
+      'receipt_date': result['receipt_date']?.toString(),
+      'number_receipt': _safeParseInt(result['number_receipt']),
+      'nds10': _safeParseDouble(result['nds10']),
+      'nds20': _safeParseDouble(result['nds20']),
+      'operation_type': _safeParseInt(result['operation_type']),
+    };
+
+    print('DEBUG: === FINAL PROCESSED JSON ===');
+    print('DEBUG: Final result: $finalResult');
+    print('DEBUG: === END FINAL PROCESSED JSON ===');
+
+    return finalResult;
+  } catch (e) {
+    print('DEBUG: Exception caught: $e');
+
+    // Проверяем на отсутствие GitHub token
+    if (e.toString().contains('GitHub API токен не настроен')) {
+      return {'Error': 'GitHub API токен не настроен'};
+    }
+
+    // Проверяем на неправильный формат GitHub token
+    if (e.toString().contains('неправильный формат')) {
       return {
-        'name_seller': result['name_seller'],
-        'retail_place_address': result['retail_place_address'],
-        'retail_place': result['retail_place'],
-        'product': result['items'],
-        'total_sum': result['total_sum'],
-        'receipt_date': result['receipt_date'],
-        'number_receipt': result['number_receipt'] is String
-            ? int.parse(result['number_receipt'])
-            : result['number_receipt'],
-        'nds10': result['nds10'] is String
-            ? double.parse(result['nds10'])
-            : result['nds10'],
-        'nds20': result['nds20'] is String
-            ? double.parse(result['nds20'])
-            : result['nds20'],
-        'operation_type': result['operation_type'] is String
-            ? int.parse(result['operation_type'])
-            : result['operation_type'],
+        'Error':
+            'GitHub API токен имеет неправильный формат. Должен начинаться с ghp_ или github_pat_'
       };
     }
 
-    return result;
-  } catch (e) {
+    // Проверяем на ошибки парсинга JSON
+    if (e.toString().contains('FormatException') ||
+        e.toString().contains('Invalid radix-10 number') ||
+        e.toString().contains('jsonDecode')) {
+      return {
+        'Error': 'AI модель вернула невалидный ответ. Попробуйте еще раз.'
+      };
+    }
+
+    if (e is DioException) {
+      print('DEBUG: DioException type: ${e.type}');
+      print('DEBUG: DioException message: ${e.message}');
+      print('DEBUG: DioException response status: ${e.response?.statusCode}');
+      print('DEBUG: DioException response data: ${e.response?.data}');
+      print('DEBUG: DioException response headers: ${e.response?.headers}');
+      print('DEBUG: DioException request headers: ${e.requestOptions.headers}');
+      print('DEBUG: DioException request data: ${e.requestOptions.data}');
+
+      if (e.response?.statusCode == 401) {
+        print('DEBUG: 401 Unauthorized - Token might be invalid or expired');
+        return {'Error': 'Ошибка авторизации GitHub API. Проверьте токен.'};
+      }
+      if (e.response?.statusCode == 404) {
+        print('DEBUG: 404 Not Found - Endpoint might be incorrect');
+        return {
+          'Error': 'GitHub AI API недоступен. Обратитесь к администратору.'
+        };
+      }
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        return {'Error': 'Таймаут соединения с GitHub AI API'};
+      }
+      if (e.type == DioExceptionType.connectionError) {
+        return {'Error': 'Ошибка подключения к GitHub AI API'};
+      }
+      return {'Error': 'Ошибка GitHub AI API: ${e.message}'};
+    }
     return {'Error': 'Ошибка при обработке: $e'};
   }
 }

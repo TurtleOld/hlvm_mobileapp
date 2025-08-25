@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class GithubTokenSettingsScreen extends StatefulWidget {
   const GithubTokenSettingsScreen({super.key});
@@ -11,6 +11,7 @@ class GithubTokenSettingsScreen extends StatefulWidget {
 
 class _GithubTokenSettingsScreenState extends State<GithubTokenSettingsScreen> {
   final TextEditingController _tokenController = TextEditingController();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   bool _isLoading = false;
   String _message = '';
 
@@ -21,8 +22,12 @@ class _GithubTokenSettingsScreenState extends State<GithubTokenSettingsScreen> {
   }
 
   Future<void> _loadToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('github_token') ?? '';
+    final token = await _secureStorage.read(key: 'github_token') ?? '';
+    print('DEBUG: Loading GitHub token');
+    print('DEBUG: Token loaded: ${token.isNotEmpty}');
+    print(
+        'DEBUG: Token starts with: ${token.isNotEmpty ? token.substring(0, 10) : 'empty'}...');
+    
     setState(() {
       _tokenController.text = token;
     });
@@ -33,8 +38,19 @@ class _GithubTokenSettingsScreenState extends State<GithubTokenSettingsScreen> {
       _isLoading = true;
       _message = '';
     });
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('github_token', _tokenController.text.trim());
+    
+    final token = _tokenController.text.trim();
+    print('DEBUG: Saving GitHub token');
+    print('DEBUG: Token length: ${token.length}');
+    print(
+        'DEBUG: Token starts with: ${token.isNotEmpty ? token.substring(0, 10) : 'empty'}...');
+
+    await _secureStorage.write(key: 'github_token', value: token);
+
+    // Проверяем, что токен сохранился
+    final savedToken = await _secureStorage.read(key: 'github_token');
+    print('DEBUG: Token saved successfully: ${savedToken != null}');
+    
     setState(() {
       _isLoading = false;
       _message = 'Github Token сохранён';

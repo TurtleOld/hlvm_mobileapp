@@ -17,8 +17,8 @@ import 'package:hlvm_mobileapp/core/services/talker_service.dart';
 import 'package:hlvm_mobileapp/core/bloc/talker_bloc.dart';
 import 'package:hlvm_mobileapp/core/widgets/talker_notification_widget.dart';
 import 'package:hlvm_mobileapp/core/utils/global_error_handler.dart';
-import 'package:hlvm_mobileapp/core/services/session_manager.dart';
-import 'package:hlvm_mobileapp/core/services/session_provider.dart';
+
+
 import 'package:hlvm_mobileapp/core/services/cache_service.dart';
 import 'package:hlvm_mobileapp/core/services/app_startup_service.dart';
 import 'package:hlvm_mobileapp/core/services/security_manager_service.dart';
@@ -129,8 +129,7 @@ Future<Widget> _createMainApp() async {
         isAppBlocked: _services['isAppBlocked'] ?? false,
         talkerService: _services['talkerService'] ?? TalkerService(),
         authService: _services['authService'] ?? AuthService(),
-        sessionManager: _services['sessionManager'] ??
-            SessionManager(authService: AuthService()),
+
         cacheService: _services['cacheService'] ?? CacheService(),
         securityManager:
             _services['securityManager'] ?? SecurityManagerService(),
@@ -142,7 +141,7 @@ Future<Widget> _createMainApp() async {
         isAppBlocked: false,
         talkerService: TalkerService(),
         authService: AuthService(),
-        sessionManager: SessionManager(authService: AuthService()),
+
         cacheService: CacheService(),
         securityManager: SecurityManagerService(),
       );
@@ -154,7 +153,7 @@ Future<Widget> _createMainApp() async {
       isAppBlocked: false,
       talkerService: TalkerService(),
       authService: AuthService(),
-      sessionManager: SessionManager(authService: AuthService()),
+      
       cacheService: CacheService(),
       securityManager: SecurityManagerService(),
     );
@@ -333,7 +332,7 @@ class _SplashScreenState extends State<SplashScreen>
         isAppBlocked: false,
         talkerService: TalkerService(),
         authService: AuthService(),
-        sessionManager: SessionManager(authService: AuthService()),
+
         cacheService: CacheService(),
         securityManager: SecurityManagerService(),
       );
@@ -475,7 +474,6 @@ class MyApp extends StatefulWidget {
   final bool isAppBlocked;
   final TalkerService talkerService;
   final AuthService authService;
-  final SessionManager sessionManager;
   final CacheService cacheService;
   final SecurityManagerService securityManager;
 
@@ -485,7 +483,6 @@ class MyApp extends StatefulWidget {
     required this.isAppBlocked,
     required this.talkerService,
     required this.authService,
-    required this.sessionManager,
     required this.cacheService,
     required this.securityManager,
   });
@@ -509,7 +506,6 @@ class _MyAppState extends State<MyApp> {
           create: (context) => AuthBloc(
             authService: widget.authService,
             talkerBloc: context.read<TalkerBloc>(),
-            sessionManager: widget.sessionManager,
           )..add(const CheckAuthStatus()),
         ),
         BlocProvider<FinanceAccountBloc>(
@@ -526,27 +522,65 @@ class _MyAppState extends State<MyApp> {
           ),
         ),
       ],
-      child: SessionProvider(
-        sessionManager: widget.sessionManager,
-        child: MaterialApp(
-          theme: AppTheme.lightTheme,
-          home: widget.isLoggedIn ? const HomePage() : const LoginScreen(),
-          routes: {
-            '/login': (context) => const LoginScreen(),
-            '/home': (context) => const HomePage(),
-            '/uploadFile': (context) => const FileReaderScreen(),
-            '/image_capture': (context) => const ImageCaptureScreen(),
-          },
-          builder: (context, child) {
-            return Stack(
-              children: [
-                child!,
-                const TalkerNotificationWidget(),
-              ],
-            );
-          },
-        ),
+      child: MaterialApp(
+        theme: AppTheme.lightTheme,
+        home: const AuthWrapper(),
+        routes: {
+          '/login': (context) => const LoginScreen(),
+          '/home': (context) => const HomePage(),
+          '/uploadFile': (context) => const FileReaderScreen(),
+          '/image_capture': (context) => const ImageCaptureScreen(),
+        },
+        builder: (context, child) {
+          return Stack(
+            children: [
+              child!,
+              const TalkerNotificationWidget(),
+            ],
+          );
+        },
       ),
+    );
+  }
+}
+
+// Виджет для определения экрана на основе состояния авторизации
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<AuthBloc, AuthState>(
+      builder: (context, state) {
+        if (state is AuthLoading) {
+          return const Scaffold(
+            backgroundColor: AppTheme.backgroundColor,
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text(
+                    'Проверка авторизации...',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        } else if (state is AuthAuthenticated) {
+          return const HomePage();
+        } else if (state is AuthError) {
+          // При ошибке показываем экран входа, но с сообщением об ошибке
+          return const LoginScreen();
+        } else {
+          return const LoginScreen();
+        }
+      },
     );
   }
 }

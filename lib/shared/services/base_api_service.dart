@@ -46,7 +46,15 @@ abstract class BaseApiService {
   Future<String> get _baseUrl async {
     final server = _prefs.getString(AppConstants.serverAddressKey);
     if (server != null && server.isNotEmpty) {
-      return server.endsWith('/api') ? server : '$server/api';
+      // Добавляем /api к базовому URL, если его нет
+      String baseUrl = server;
+      if (baseUrl.endsWith('/api/')) {
+        // Убираем trailing slash для единообразия
+        baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+      } else if (!baseUrl.endsWith('/api')) {
+        baseUrl = baseUrl.endsWith('/') ? '${baseUrl}api' : '$baseUrl/api';
+      }
+      return baseUrl;
     }
     throw Exception(AppConstants.serverAddressRequired);
   }

@@ -10,7 +10,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hlvm_mobileapp/main.dart';
 import 'package:hlvm_mobileapp/core/services/talker_service.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
-import 'package:hlvm_mobileapp/core/services/session_manager.dart';
 import 'package:hlvm_mobileapp/core/services/cache_service.dart';
 import 'package:hlvm_mobileapp/core/services/security_manager_service.dart';
 
@@ -22,7 +21,7 @@ void main() {
       isAppBlocked: false,
       talkerService: TalkerService(),
       authService: AuthService(),
-      sessionManager: SessionManager(authService: AuthService()),
+      
       cacheService: CacheService(),
       securityManager: SecurityManagerService(),
     ));

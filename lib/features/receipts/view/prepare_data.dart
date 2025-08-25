@@ -2,8 +2,6 @@ import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'parser_json.dart';
-
 class PrepareData {
   int _ensureInt(dynamic value) {
     if (value is int) {
@@ -31,62 +29,101 @@ class PrepareData {
 
   Future<Map<String, dynamic>> prepareData(
       Map<String, dynamic> jsonData) async {
+    print('DEBUG: === PREPARE DATA START ===');
+    print('DEBUG: Input jsonData: $jsonData');
+    print('DEBUG: Input keys: ${jsonData.keys.toList()}');
+    
     const storage = FlutterSecureStorage();
     final accessToken = await storage.read(key: 'access_token');
     final prefs = await SharedPreferences.getInstance();
     final selectedAccount = prefs.getInt('selectedAccountId');
     final Map<String, dynamic> decodedToken = JwtDecoder.decode(accessToken!);
     final int userId = _ensureInt(decodedToken['user_id']);
-    // Get seller information
-    final nameSeller = ParserJson.searchKey(jsonData, 'user');
+    
+    print('DEBUG: userId: $userId');
+    print('DEBUG: selectedAccount: $selectedAccount');
+
+    // Get seller information from AI response
+    final nameSeller = jsonData['name_seller']?.toString() ?? '';
     final retailPlaceAddress =
-        ParserJson.searchKey(jsonData, 'retailPlaceAddress');
-    final retailPlace = ParserJson.searchKey(jsonData, 'retailPlace');
+        jsonData['retail_place_address']?.toString() ?? '';
+    final retailPlace = jsonData['retail_place']?.toString() ?? '';
     final seller = {
       'user': userId,
       'name_seller': nameSeller,
       'retail_place_address': retailPlaceAddress,
       'retail_place': retailPlace,
     };
-    // Get products information
-    final items = ParserJson.searchKey(jsonData, 'items', defaultValue: []);
+    
+    // Get products information from AI response
+    final items =
+        jsonData['product'] ?? []; // Changed from 'items' to 'product'
     final List<Map<String, dynamic>> products = [];
 
-    for (var item in items) {
-      final name = ParserJson.searchKey(item, 'name');
-      final amount =
-          _ensureDouble(ParserJson.searchKey(item, 'sum', defaultValue: 0));
-      final quantity = _ensureDouble(
-          ParserJson.searchKey(item, 'quantity', defaultValue: 0));
-      final price =
-          _ensureDouble(ParserJson.searchKey(item, 'price', defaultValue: 0));
-      final ndsType =
-          _ensureInt(ParserJson.searchKey(item, 'nds', defaultValue: 0));
-      final ndsNum =
-          _ensureDouble(ParserJson.searchKey(item, 'ndsSum', defaultValue: 0));
+    print('DEBUG: Processing ${items.length} items from AI response');
+
+    for (int i = 0; i < items.length; i++) {
+      final item = items[i];
+      final name = item['name']?.toString() ?? '';
+      final price = _ensureDouble(item['price'] ?? 0);
+      final quantity = _ensureDouble(item['quantity'] ?? 1);
+      final category = item['category']?.toString() ?? '';
+
+      // Calculate amount if not provided
+      final amount = price * quantity;
+
+      print(
+          'DEBUG: Item $i: name="$name", price=$price, quantity=$quantity, amount=$amount');
+
+      // Валидация данных
+      if (price <= 0) {
+        print('DEBUG: WARNING - Item $i has invalid price: $price');
+      }
+      if (quantity <= 0) {
+        print('DEBUG: WARNING - Item $i has invalid quantity: $quantity');
+      }
+      if (amount <= 0) {
+        print('DEBUG: WARNING - Item $i has invalid amount: $amount');
+      }
+      
       products.add({
         'user': userId,
         'product_name': name,
         'amount': amount,
         'quantity': quantity,
         'price': price,
-        'nds_type': ndsType,
-        'nds_sum': ndsNum,
+        'category': category,
+        'nds_type': 0, // Default NDS type
+        'nds_sum': 0, // Default NDS sum
       });
     }
 
-    final receiptDate = ParserJson.searchKey(jsonData, 'dateTime');
-    final numberReceipt = _ensureInt(ParserJson.searchKey(
-        jsonData, 'fiscalDocumentNumber',
-        defaultValue: 0));
-    final nds10 =
-        _ensureDouble(ParserJson.searchKey(jsonData, 'nds10', defaultValue: 0));
-    final nds20 =
-        _ensureDouble(ParserJson.searchKey(jsonData, 'nds20', defaultValue: 0));
-    final totalSum = _ensureDouble(
-        ParserJson.searchKey(jsonData, 'totalSum', defaultValue: 0));
-    final operationType = _ensureInt(
-        ParserJson.searchKey(jsonData, 'operationType', defaultValue: 0));
+    // Преобразуем дату из DD.MM.YYYY в YYYY-MM-DD HH:MM:SS
+    String receiptDate = jsonData['receipt_date']?.toString() ?? '';
+    if (receiptDate.isNotEmpty) {
+      try {
+        // Парсим дату из формата DD.MM.YYYY
+        final parts = receiptDate.split('.');
+        if (parts.length == 3) {
+          final day = parts[0];
+          final month = parts[1];
+          final year = parts[2];
+          // Преобразуем в YYYY-MM-DD HH:MM:SS
+          receiptDate = '$year-$month-${day.padLeft(2, '0')} 00:00:00';
+          print(
+              'DEBUG: Converted date from DD.MM.YYYY to ISO format: $receiptDate');
+        }
+      } catch (e) {
+        print('DEBUG: Error converting date format: $e');
+        // Если не удалось преобразовать, оставляем как есть
+      }
+    }
+
+    final numberReceipt = _ensureInt(jsonData['number_receipt'] ?? 0);
+    final nds10 = _ensureDouble(jsonData['nds10'] ?? 0);
+    final nds20 = _ensureDouble(jsonData['nds20'] ?? 0);
+    final totalSum = _ensureDouble(jsonData['total_sum'] ?? 0);
+    final operationType = _ensureInt(jsonData['operation_type'] ?? 1);
 
     final result = {
       'user': userId,
@@ -100,6 +137,13 @@ class PrepareData {
       'seller': seller,
       'product': products,
     };
+
+    print('DEBUG: === PREPARE DATA RESULT ===');
+    print('DEBUG: Final result: $result');
+    print('DEBUG: Result keys: ${result.keys.toList()}');
+    print('DEBUG: seller: ${result['seller']}');
+    print('DEBUG: product count: ${(result['product'] as List).length}');
+    print('DEBUG: === END PREPARE DATA ===');
 
     return result;
   }

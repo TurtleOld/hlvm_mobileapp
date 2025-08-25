@@ -112,7 +112,7 @@ class ServerSettingsService {
   Future<void> setServerPort(int port) async {
     try {
       // Проверяем корректность порта
-      if (port == null || port < 1 || port > 65535) {
+      if (port < 1 || port > 65535) {
         throw Exception(
             'Некорректный порт. Порт должен быть в диапазоне 1-65535');
       }
@@ -194,8 +194,7 @@ class ServerSettingsService {
   Future<void> setTimeout(int timeoutSeconds) async {
     try {
       // Проверяем корректность таймаута
-      if (timeoutSeconds == null ||
-          timeoutSeconds < 1 ||
+      if (timeoutSeconds < 1 ||
           timeoutSeconds > 300) {
         throw Exception(
             'Некорректный таймаут. Таймаут должен быть в диапазоне 1-300 секунд');
@@ -233,7 +232,7 @@ class ServerSettingsService {
   Future<void> setMaxRetries(int attempts) async {
     try {
       // Проверяем корректность количества попыток
-      if (attempts == null || attempts < 1 || attempts > 10) {
+      if (attempts < 1 || attempts > 10) {
         throw Exception(
             'Некорректное количество попыток. Должно быть в диапазоне 1-10');
       }

@@ -122,7 +122,7 @@ class _LoginScreenState extends State<LoginScreen>
         if (state is AuthAuthenticated) {
           // Завершаем контекст автозаполнения при успешной авторизации
           TextInput.finishAutofillContext(shouldSave: true);
-          Navigator.pushReplacementNamed(context, '/home');
+          // Не делаем навигацию - AuthWrapper сам определит экран
         } else if (state is AuthError) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

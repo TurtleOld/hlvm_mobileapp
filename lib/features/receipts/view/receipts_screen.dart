@@ -115,10 +115,10 @@ class _ReceiptScreenState extends State<ReceiptScreen>
 
     // Создаем список продуктов
     final productList = products.map((product) {
-      final productName = product['name'] ?? 'Неизвестный продукт';
+      final productName = product['product_name'] ?? 'Неизвестный продукт';
       final quantity = product['quantity'] ?? 1;
       final price = product['price'] ?? 0.0;
-      final sum = product['sum'] ?? 0.0;
+      final sum = product['amount'] ?? 0.0;
 
       return _buildDetailItem(
         icon: Icons.shopping_cart,

@@ -10,6 +10,7 @@ class SecureTokenStorageService {
   static const String _tokenExpiryKey = 'token_expiry';
   static const String _userDataKey = 'user_data';
   static const String _sessionIdKey = 'session_id';
+  static const String _githubTokenKey = 'github_token';
 
   final FlutterSecureStorage _secureStorage;
 
@@ -178,6 +179,36 @@ class SecureTokenStorageService {
     }
   }
 
+  /// Сохраняет GitHub токен
+  Future<void> storeGithubToken(String token) async {
+    try {
+      await _secureStorage.write(
+        key: _githubTokenKey,
+        value: token,
+      );
+    } catch (e) {
+      throw Exception('Не удалось сохранить GitHub токен: $e');
+    }
+  }
+
+  /// Получает GitHub токен
+  Future<String?> getGithubToken() async {
+    try {
+      return await _secureStorage.read(key: _githubTokenKey);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Удаляет GitHub токен
+  Future<void> removeGithubToken() async {
+    try {
+      await _secureStorage.delete(key: _githubTokenKey);
+    } catch (e) {
+      // Игнорируем ошибки при удалении
+    }
+  }
+
   /// Очищает все токены и данные сессии
   Future<void> clearTokens() async {
     try {
@@ -186,6 +217,7 @@ class SecureTokenStorageService {
       await _secureStorage.delete(key: _tokenExpiryKey);
       await _secureStorage.delete(key: _userDataKey);
       await _secureStorage.delete(key: _sessionIdKey);
+      // НЕ удаляем GitHub токен при очистке, так как он не связан с сессией
     } catch (e) {
       // Игнорируем ошибки очистки
     }
@@ -199,6 +231,7 @@ class SecureTokenStorageService {
       final isValidToken = await hasValidToken();
       final sessionId = await getSessionId();
       final userData = await getUserData();
+      final hasGithubToken = await getGithubToken() != null;
 
       return {
         'hasAccessToken': hasAccessToken,
@@ -207,6 +240,7 @@ class SecureTokenStorageService {
         'sessionId': sessionId,
         'hasUserData': userData != null,
         'userDataKeys': userData?.keys.toList() ?? [],
+        'hasGithubToken': hasGithubToken,
       };
     } catch (e) {
       return {

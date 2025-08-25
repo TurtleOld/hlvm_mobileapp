@@ -1,16 +1,15 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:hlvm_mobileapp/core/services/session_manager.dart';
+
 import 'package:hlvm_mobileapp/core/services/server_settings_service.dart';
 import 'package:hlvm_mobileapp/core/constants/app_constants.dart';
 
 import 'package:talker/talker.dart';
 
-/// Безопасный HTTP клиент с защитой от Session Fixation
+/// Безопасный HTTP клиент
 class SecureHttpClient {
   final http.Client _httpClient;
-  final SessionManager _sessionManager;
   final FlutterSecureStorage _secureStorage;
   final ServerSettingsService _serverSettings;
   final Talker _logger;
@@ -23,14 +22,12 @@ class SecureHttpClient {
   static const int _maxRetries = 3;
 
   SecureHttpClient({
-    required SessionManager sessionManager,
     String? baseUrl,
     http.Client? httpClient,
     FlutterSecureStorage? secureStorage,
     ServerSettingsService? serverSettings,
     Talker? logger,
-  })  : _sessionManager = sessionManager,
-        _baseUrl = baseUrl,
+  })  : _baseUrl = baseUrl,
         _httpClient = httpClient ?? http.Client(),
         _secureStorage = secureStorage ?? const FlutterSecureStorage(),
         _serverSettings = serverSettings ?? ServerSettingsService(),
@@ -77,6 +74,18 @@ class SecureHttpClient {
           (url.length > 200 || url.contains(' ') || url.contains('\n'))) {
         _logger.warning('Invalid server URL format: $url');
         return null;
+      }
+
+      // Добавляем /api к базовому URL, если его нет
+      if (url != null) {
+        String baseUrl = url;
+        if (baseUrl.endsWith('/api/')) {
+          // Убираем trailing slash для единообразия
+          baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+        } else if (!baseUrl.endsWith('/api')) {
+          baseUrl = baseUrl.endsWith('/') ? '${baseUrl}api' : '$baseUrl/api';
+        }
+        return baseUrl;
       }
 
       return url;
@@ -222,23 +231,11 @@ class SecureHttpClient {
 
     while (retryCount < _maxRetries) {
       try {
-        final sessionValidation =
-            await _sessionManager.validateCurrentSession();
-        if (!sessionValidation.isValid) {
-          if (sessionValidation.isExpired) {
-            _logger.warning('Сессия истекла, перенаправляем на аутентификацию');
-            throw SessionExpiredException('Сессия истекла');
-          } else if (sessionValidation.isSuspicious) {
-            _logger.warning(
-                'Обнаружена подозрительная активность: ${sessionValidation.reason}');
-            throw SuspiciousActivityException(
-                sessionValidation.reason ?? 'Подозрительная активность');
-          } else {
-            _logger
-                .warning('Сессия недействительна: ${sessionValidation.reason}');
-            throw InvalidSessionException(
-                sessionValidation.reason ?? 'Сессия недействительна');
-          }
+        // Проверяем наличие токенов
+        final accessToken = await _secureStorage.read(key: 'access_token');
+        if (accessToken == null) {
+          _logger.warning('Access token не найден');
+          throw SessionExpiredException('Access token не найден');
         }
 
         final secureHeaders = await _prepareSecureHeaders(headers);
@@ -256,7 +253,7 @@ class SecureHttpClient {
         );
 
         await _handleResponse(response, endpoint);
-        await _updateSessionActivity();
+
 
         return response;
       } catch (e) {
@@ -319,11 +316,7 @@ class SecureHttpClient {
       ...?headers,
     };
 
-    final sessionInfo = await _sessionManager.getCurrentSessionInfo();
-    if (sessionInfo != null) {
-      secureHeaders['X-Session-ID'] = sessionInfo.sessionId;
-      secureHeaders['X-Device-Fingerprint'] = sessionInfo.deviceFingerprint;
-    }
+
 
     // Добавляем access token
     final accessToken = await _secureStorage.read(key: 'access_token');
@@ -427,16 +420,16 @@ class SecureHttpClient {
         }
       }
 
-      await _sessionManager.forceLogout(
-        reason: 'Не удалось обновить токены аутентификации',
-        notifyUser: true,
-      );
+      // Очищаем токены при ошибке аутентификации
+      await _secureStorage.delete(key: 'access_token');
+      await _secureStorage.delete(key: 'refresh_token');
+      await _secureStorage.delete(key: 'isLoggedIn');
     } catch (e) {
       _logger.error('Ошибка обработки 401 ответа: $e');
-      await _sessionManager.forceLogout(
-        reason: 'Ошибка обработки ответа аутентификации',
-        notifyUser: true,
-      );
+      // Очищаем токены при ошибке обработки
+      await _secureStorage.delete(key: 'access_token');
+      await _secureStorage.delete(key: 'refresh_token');
+      await _secureStorage.delete(key: 'isLoggedIn');
     }
   }
 
@@ -450,10 +443,10 @@ class SecureHttpClient {
       final errorCode = responseBody?['error_code'] as String?;
 
       if (errorCode == 'SESSION_EXPIRED' || errorCode == 'INVALID_SESSION') {
-        await _sessionManager.forceLogout(
-          reason: 'Сессия отклонена сервером',
-          notifyUser: true,
-        );
+        // Очищаем токены при отклонении сессии
+        await _secureStorage.delete(key: 'access_token');
+        await _secureStorage.delete(key: 'refresh_token');
+        await _secureStorage.delete(key: 'isLoggedIn');
       } else {
         _logger.warning(
             'Ошибка доступа: ${responseBody?['message'] ?? 'Неизвестная ошибка'}');
@@ -467,10 +460,10 @@ class SecureHttpClient {
     _logger.error('Ошибка сервера ${response.statusCode}: ${response.body}');
 
     if (response.statusCode >= 500) {
-      await _sessionManager.forceLogout(
-        reason: 'Критическая ошибка сервера',
-        notifyUser: false,
-      );
+      // Очищаем токены при критической ошибке сервера
+      await _secureStorage.delete(key: 'access_token');
+      await _secureStorage.delete(key: 'refresh_token');
+      await _secureStorage.delete(key: 'isLoggedIn');
     }
   }
 
@@ -586,7 +579,6 @@ class SecureHttpClient {
 
   Future<Map<String, dynamic>> getClientStatus() async {
     try {
-      final sessionInfo = await _sessionManager.getCurrentSessionInfo();
       final hasAccessToken =
           await _secureStorage.read(key: 'access_token') != null;
       final hasRefreshToken =
@@ -594,9 +586,7 @@ class SecureHttpClient {
       final connectionStatus = await checkConnection();
 
       return {
-        'hasValidSession': sessionInfo != null,
-        'sessionId': sessionInfo?.sessionId,
-        'sessionExpiresAt': sessionInfo?.expiresAt.toIso8601String(),
+        'hasValidSession': hasAccessToken && hasRefreshToken,
         'hasAccessToken': hasAccessToken,
         'hasRefreshToken': hasRefreshToken,
         'connectionStatus': connectionStatus,

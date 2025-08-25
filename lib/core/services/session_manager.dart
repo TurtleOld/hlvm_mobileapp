@@ -29,8 +29,10 @@ class SessionManager {
   static const String _loginAttemptsKey = 'login_attempts';
 
   // Константы безопасности
-  static const Duration _sessionTimeout = Duration(hours: 24);
-  static const Duration _inactivityTimeout = Duration(hours: 2);
+  static const Duration _sessionTimeout =
+      Duration(hours: 1); // Соответствует времени жизни access токена
+  static const Duration _inactivityTimeout =
+      Duration(minutes: 30); // Уменьшаем время неактивности
   static const int _maxLoginAttempts = 5;
   static const Duration _lockoutDuration = Duration(minutes: 30);
 
@@ -48,9 +50,6 @@ class SessionManager {
   /// Инициализация менеджера сессий
   Future<void> initialize() async {
     try {
-      // Аннулируем любые существующие сессии при запуске
-      await _invalidateExistingSessions();
-
       // Запускаем мониторинг сессий
       _startSessionMonitoring();
 
@@ -67,7 +66,6 @@ class SessionManager {
   /// Создание новой безопасной сессии после аутентификации
   ///
   /// Этот метод является ключевым для защиты от Session Fixation:
-  /// - Аннулирует все предыдущие сессии
   /// - Генерирует новый уникальный session ID
   /// - Создает fingerprint устройства
   /// - Устанавливает временные метки
@@ -80,8 +78,8 @@ class SessionManager {
       _logger
           .info('Создание новой безопасной сессии для пользователя: $username');
 
-      // 1. Аннулируем все существующие сессии
-      await _invalidateExistingSessions();
+      // 1. Очищаем только сессионные данные, но сохраняем device fingerprint
+      await _clearSessionData();
 
       // 2. Генерируем новый уникальный session ID
       final sessionId = await _generateSecureSessionId();
@@ -137,6 +135,16 @@ class SessionManager {
   /// - Подозрительную активность
   Future<SessionValidationResult> validateCurrentSession() async {
     try {
+      // Сначала проверяем наличие токенов авторизации
+      final accessToken = await _secureStorage.read(key: 'access_token');
+      final refreshToken = await _secureStorage.read(key: 'refresh_token');
+      final isLoggedIn = await _secureStorage.read(key: 'isLoggedIn');
+
+      if (accessToken == null || refreshToken == null || isLoggedIn != 'true') {
+        return SessionValidationResult.invalid(
+            'Токены авторизации отсутствуют');
+      }
+
       final sessionId = await _secureStorage.read(key: _sessionIdKey);
       if (sessionId == null) {
         return SessionValidationResult.invalid('Сессия не найдена');
@@ -152,10 +160,27 @@ class SessionManager {
       final createdAt = DateTime.parse(createdString);
       final now = DateTime.now();
 
-      // Проверяем истечение сессии
-      if (now.isAfter(createdAt.add(_sessionTimeout))) {
-        await _invalidateSession('Сессия истекла по времени');
-        return SessionValidationResult.expired('Сессия истекла по времени');
+      // Проверяем, нужно ли обновить токен
+      if (await _authService.shouldRefreshToken()) {
+        try {
+          await _authService.refreshToken();
+          // Если токен обновлен успешно, обновляем время создания сессии
+          await _secureStorage.write(
+              key: _sessionCreatedKey, value: now.toIso8601String());
+          _logger.info('Токен успешно обновлен, сессия продлена');
+        } catch (e) {
+          _logger.warning('Не удалось обновить токен: $e');
+          // Проверяем, есть ли refresh token
+          final refreshToken = await _secureStorage.read(key: 'refresh_token');
+          if (refreshToken == null) {
+            await _invalidateSession('Refresh token отсутствует');
+            return SessionValidationResult.expired('Refresh token отсутствует');
+          }
+
+          // Если refresh token есть, но обновление не удалось, возможно он истек
+          await _invalidateSession('Refresh token истек');
+          return SessionValidationResult.expired('Refresh token истек');
+        }
       }
 
       // Проверяем неактивность
@@ -170,15 +195,20 @@ class SessionManager {
         }
       }
 
-      // Проверяем fingerprint устройства
+      // Проверяем fingerprint устройства (более мягкая проверка)
       final storedFingerprint =
           await _secureStorage.read(key: _deviceFingerprintKey);
-      final currentFingerprint = await _generateDeviceFingerprint();
-
-      if (storedFingerprint != currentFingerprint) {
-        await _invalidateSession('Обнаружено изменение устройства');
-        return SessionValidationResult.suspicious(
-            'Обнаружено изменение устройства');
+      
+      if (storedFingerprint != null) {
+        final currentFingerprint = await _generateDeviceFingerprint();
+        
+        // Только если fingerprint сильно отличается, считаем это подозрительным
+        if (storedFingerprint != currentFingerprint &&
+            !_isSimilarFingerprint(storedFingerprint, currentFingerprint)) {
+          await _invalidateSession('Обнаружено изменение устройства');
+          return SessionValidationResult.suspicious(
+              'Обнаружено изменение устройства');
+        }
       }
 
       // Проверяем подозрительную активность
@@ -261,7 +291,7 @@ class SessionManager {
       _notifySessionEvent(SessionEvent.userLogout());
     } catch (e) {
       _logger.error('Ошибка выхода из аккаунта: $e');
-      // Fallback: прямая очистка сессии
+      // Fallback: прямая очистка сессии и токенов
       await _invalidateSession('Ошибка выхода из аккаунта');
     }
   }
@@ -279,7 +309,7 @@ class SessionManager {
       _notifySessionEvent(SessionEvent.sessionExpired());
     } catch (e) {
       _logger.error('Ошибка выхода при истечении сессии: $e');
-      // Fallback: прямая очистка сессии
+      // Fallback: прямая очистка сессии и токенов
       await _invalidateSession('Ошибка выхода при истечении сессии');
 
       if (context.mounted) {
@@ -397,11 +427,87 @@ class SessionManager {
 
   /// Генерация fingerprint устройства
   Future<String> _generateDeviceFingerprint() async {
-    // В реальном приложении здесь должна быть более сложная логика
-    // с учетом характеристик устройства
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (i) => random.nextInt(256));
-    return base64Url.encode(bytes);
+    try {
+      // Сначала пытаемся получить существующий fingerprint
+      final existingFingerprint =
+          await _secureStorage.read(key: 'device_fingerprint_stable');
+
+      if (existingFingerprint != null) {
+        return existingFingerprint;
+      }
+
+      // Если fingerprint не существует, создаем стабильный fingerprint
+      // Используем комбинацию доступных характеристик устройства
+      final deviceInfo = await _getDeviceInfo();
+      final fingerprint = _createStableFingerprint(deviceInfo);
+
+      // Сохраняем стабильный fingerprint
+      await _secureStorage.write(
+          key: 'device_fingerprint_stable', value: fingerprint);
+
+      return fingerprint;
+    } catch (e) {
+      _logger.error('Ошибка генерации device fingerprint: $e');
+      // Fallback: возвращаем стабильный fingerprint на основе времени
+      return 'device_${DateTime.now().millisecondsSinceEpoch ~/ (24 * 60 * 60 * 1000)}';
+    }
+  }
+
+  /// Получение информации об устройстве
+  Future<Map<String, String>> _getDeviceInfo() async {
+    try {
+      // В реальном приложении здесь можно использовать device_info_plus
+      // для получения реальных характеристик устройства
+      return {
+        'platform': 'flutter',
+        'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
+      };
+    } catch (e) {
+      return {'platform': 'unknown'};
+    }
+  }
+
+  /// Создание стабильного fingerprint
+  String _createStableFingerprint(Map<String, String> deviceInfo) {
+    final values = deviceInfo.values.join('|');
+    final hash = values.hashCode.toString();
+    return 'device_${hash}_${DateTime.now().millisecondsSinceEpoch ~/ (24 * 60 * 60 * 1000)}';
+  }
+
+  /// Проверка схожести fingerprint'ов
+  bool _isSimilarFingerprint(String stored, String current) {
+    try {
+      // Если fingerprint'ы содержат одинаковые базовые части, считаем их схожими
+      final storedParts = stored.split('_');
+      final currentParts = current.split('_');
+
+      if (storedParts.length >= 2 && currentParts.length >= 2) {
+        // Сравниваем базовую часть (device + hash)
+        final storedBase = storedParts.take(2).join('_');
+        final currentBase = currentParts.take(2).join('_');
+
+        return storedBase == currentBase;
+      }
+
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Очистка сессионных данных (сохраняет device fingerprint)
+  Future<void> _clearSessionData() async {
+    try {
+      await _secureStorage.delete(key: _sessionIdKey);
+      await _secureStorage.delete(key: _sessionCreatedKey);
+      await _secureStorage.delete(key: _sessionLastActivityKey);
+      await _secureStorage.delete(key: _sessionVersionKey);
+      // НЕ удаляем device fingerprint, чтобы он оставался стабильным
+
+      _logger.info('Сессионные данные очищены');
+    } catch (e) {
+      _logger.error('Ошибка очистки сессионных данных: $e');
+    }
   }
 
   /// Аннулирование существующих сессий
@@ -425,6 +531,12 @@ class SessionManager {
       final sessionId = await _secureStorage.read(key: _sessionIdKey);
 
       await _invalidateExistingSessions();
+      
+      // Также очищаем токены авторизации
+      await _secureStorage.delete(key: 'access_token');
+      await _secureStorage.delete(key: 'refresh_token');
+      await _secureStorage.delete(key: 'isLoggedIn');
+      await _secureStorage.delete(key: 'token_refreshed_at');
 
       if (sessionId != null) {
         _logger.info('Сессия аннулирована: $sessionId, причина: $reason');
@@ -509,7 +621,7 @@ class SessionManager {
   /// Запуск мониторинга сессий
   void _startSessionMonitoring() {
     _sessionMonitorTimer =
-        Timer.periodic(const Duration(minutes: 1), (timer) async {
+        Timer.periodic(const Duration(minutes: 2), (timer) async {
       try {
         final validation = await validateCurrentSession();
         if (!validation.isValid) {

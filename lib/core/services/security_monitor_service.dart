@@ -1,25 +1,20 @@
 import 'dart:async';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:hlvm_mobileapp/core/services/session_manager.dart';
-import 'package:hlvm_mobileapp/services/authentication.dart';
+
 import '../utils/logger.dart';
 
 /// Упрощенный сервис мониторинга безопасности
 class SecurityMonitorService {
   final FlutterSecureStorage _secureStorage;
-  final SessionManager _sessionManager;
 
   static const String _lastSecurityCheckKey = 'last_security_check';
 
   Timer? _securityCheckTimer;
-  static const Duration _securityCheckInterval = Duration(minutes: 5);
+  static const Duration _securityCheckInterval = Duration(minutes: 15);
 
   SecurityMonitorService({
     FlutterSecureStorage? secureStorage,
-    SessionManager? sessionManager,
-  })  : _secureStorage = secureStorage ?? const FlutterSecureStorage(),
-        _sessionManager =
-            sessionManager ?? SessionManager(authService: AuthService());
+  }) : _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   /// Инициализация сервиса
   Future<void> initialize() async {
@@ -58,30 +53,22 @@ class SecurityMonitorService {
     }
   }
 
-  /// Базовая проверка сессии
+  /// Базовая проверка токенов
   Future<void> _checkBasicSession() async {
     try {
-      final sessionInfo = await _sessionManager.getCurrentSessionInfo();
-      if (sessionInfo == null) return;
-
-      // Проверяем, не истекла ли сессия
-      if (sessionInfo.isExpired) {
-        // Принудительно завершаем сессию
-        await _sessionManager.forceLogout(
-          reason: 'Сессия истекла по времени',
-          notifyUser: true,
-        );
+      final accessToken = await _secureStorage.read(key: 'access_token');
+      final refreshToken = await _secureStorage.read(key: 'refresh_token');
+      
+      if (accessToken == null || refreshToken == null) {
+        // Токены отсутствуют, очищаем все
+        await _secureStorage.delete(key: 'access_token');
+        await _secureStorage.delete(key: 'refresh_token');
+        await _secureStorage.delete(key: 'isLoggedIn');
+        AppLogger.warning('Токены отсутствуют, очищены');
         return;
       }
-
-      // Проверяем неактивность
-      if (sessionInfo.inactivityTime.inHours > 2) {
-        // Логируем неактивность
-        AppLogger.warning(
-            'Сессия неактивна: ${sessionInfo.inactivityTime.inHours} часов');
-      }
     } catch (e) {
-      AppLogger.error('Ошибка проверки сессии: $e');
+      AppLogger.error('Ошибка проверки токенов: $e');
     }
   }
 

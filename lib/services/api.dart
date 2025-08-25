@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hlvm_mobileapp/models/finance_account_model.dart';
 import 'package:hlvm_mobileapp/core/services/server_settings_service.dart';
 
@@ -9,10 +10,49 @@ class ApiService {
   final Dio _dio = Dio();
   final AuthService _authService = AuthService();
   final ServerSettingsService _serverSettings = ServerSettingsService();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   ApiService() {
     // Используем interceptor из AuthService вместо дублирования
     _dio.interceptors.addAll(_authService.dio.interceptors);
+  }
+
+  /// Создает отдельный Dio клиент для GitHub AI API с GitHub token
+  Dio _createGithubApiClient() {
+    final dio = Dio();
+    dio.options.connectTimeout = const Duration(seconds: 30);
+    dio.options.receiveTimeout = const Duration(seconds: 30);
+    dio.options.sendTimeout = const Duration(seconds: 30);
+    return dio;
+  }
+
+  /// Выполняет запрос к GitHub AI API с GitHub token
+  Future<Response> postToGithubAI(String url, dynamic data) async {
+    final githubToken = await _secureStorage.read(key: 'github_token');
+
+    if (githubToken == null || githubToken.isEmpty) {
+      throw Exception('GitHub API токен не настроен');
+    }
+
+    // Проверяем формат токена (поддерживаем оба формата: старый ghp_ и новый github_pat_)
+    if (!githubToken.startsWith('ghp_') &&
+        !githubToken.startsWith('github_pat_')) {
+      throw Exception(
+          'GitHub API токен имеет неправильный формат. Должен начинаться с ghp_ или github_pat_');
+    }
+
+    final dio = _createGithubApiClient();
+
+    return await dio.post(
+      url,
+      data: data,
+      options: Options(
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $githubToken',
+        },
+      ),
+    );
   }
 
   Future<String?> get _baseUrl async {
@@ -24,7 +64,17 @@ class ApiService {
           serverUrl.contains('\n')) {
         return null; // Возвращаем null вместо исключения
       }
-      return serverUrl;
+      
+      // Добавляем /api к базовому URL, если его нет
+      String baseUrl = serverUrl;
+      if (baseUrl.endsWith('/api/')) {
+        // Убираем trailing slash для единообразия
+        baseUrl = baseUrl.substring(0, baseUrl.length - 1);
+      } else if (!baseUrl.endsWith('/api')) {
+        baseUrl = baseUrl.endsWith('/') ? '${baseUrl}api' : '$baseUrl/api';
+      }
+
+      return baseUrl;
     }
     return null; // Возвращаем null вместо исключения
   }
@@ -190,14 +240,36 @@ class ApiService {
 
   Future<String> createReceipt(Map<String, dynamic> jsonData) async {
     try {
+      print('DEBUG: createReceipt called with data: ${jsonData.keys.toList()}');
+      print('DEBUG: Full JSON data: $jsonData');
+
+      // Детальное логирование каждого поля
+      print('DEBUG: === JSON FIELD DETAILS ===');
+      jsonData.forEach((key, value) {
+        print('DEBUG: $key: $value (type: ${value.runtimeType})');
+        if (value is List) {
+          print('DEBUG:   $key is List with ${value.length} items');
+          for (int i = 0; i < value.length && i < 3; i++) {
+            print('DEBUG:     item $i: ${value[i]}');
+          }
+          if (value.length > 3) {
+            print('DEBUG:     ... and ${value.length - 3} more items');
+          }
+        }
+      });
+      print('DEBUG: === END JSON FIELD DETAILS ===');
+      
       final baseUrl = await _baseUrl;
       if (baseUrl == null) {
+        print('DEBUG: Server URL is null');
         return "Необходимо указать адрес сервера в настройках";
       }
 
+      print('DEBUG: Using base URL: $baseUrl');
       final timeout = await _serverSettings.getTimeout() ?? 30;
       final retryAttempts = await _serverSettings.getMaxRetries() ?? 3;
 
+      print('DEBUG: Making POST request to: $baseUrl/receipts/create-receipt/');
       final response = await _makeRequestWithRetry(
         () => _dio.post(
           '$baseUrl/receipts/create-receipt/',
@@ -213,9 +285,15 @@ class ApiService {
         retryAttempts,
       );
 
+      print('DEBUG: Response status code: ${response.statusCode}');
+      print('DEBUG: Response data: ${response.data}');
+      
       if (response.statusCode == 200 || response.statusCode == 201) {
+        print('DEBUG: Receipt created successfully');
         return 'Чек успешно добавлен!';
       } else {
+        print(
+            'DEBUG: Receipt creation failed with status: ${response.statusCode}');
         if (response.data != null) {
           if (response.data is Map && response.data['detail'] != null) {
             return response.data['detail'].toString();
@@ -225,6 +303,7 @@ class ApiService {
         return 'Чек не был добавлен, повторите попытку!';
       }
     } catch (e) {
+      print('DEBUG: Exception in createReceipt: $e');
       if (e is DioException) {
         // Обработка ошибок авторизации
         if (e.response?.statusCode == 401) {
@@ -364,4 +443,10 @@ class ApiService {
         port > 0 &&
         port <= 65535;
   }
+
+  /// Получает Dio клиент с настроенными интерцепторами
+  Dio get dio => _dio;
+
+  /// Получает базовый URL с /api суффиксом
+  Future<String?> get baseUrl => _baseUrl;
 }
