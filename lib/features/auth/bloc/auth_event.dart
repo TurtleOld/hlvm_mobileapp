@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:hlvm_mobileapp/core/services/bruteforce_protection_service.dart';
 
 /// Базовый класс для событий аутентификации
 abstract class AuthEvent {

@@ -98,7 +98,7 @@ class FinanceAccountBloc
       // Пока просто обновляем список
       final accounts = await _apiService.fetchFinanceAccount();
 
-      _talkerBloc.add(ShowSuccessEvent(message: 'Счет успешно создан'));
+      _talkerBloc.add(const ShowSuccessEvent(message: 'Счет успешно создан'));
       emit(FinanceAccountOperationSuccess(
         message: 'Счет успешно создан',
         accounts: accounts,
@@ -134,7 +134,7 @@ class FinanceAccountBloc
 
       final accounts = await _apiService.fetchFinanceAccount();
 
-      _talkerBloc.add(ShowSuccessEvent(message: 'Счет успешно обновлен'));
+      _talkerBloc.add(const ShowSuccessEvent(message: 'Счет успешно обновлен'));
       emit(FinanceAccountOperationSuccess(
         message: 'Счет успешно обновлен',
         accounts: accounts,
@@ -170,7 +170,7 @@ class FinanceAccountBloc
 
       final accounts = await _apiService.fetchFinanceAccount();
 
-      _talkerBloc.add(ShowSuccessEvent(message: 'Счет успешно удален'));
+      _talkerBloc.add(const ShowSuccessEvent(message: 'Счет успешно удален'));
       emit(FinanceAccountOperationSuccess(
         message: 'Счет успешно удален',
         accounts: accounts,

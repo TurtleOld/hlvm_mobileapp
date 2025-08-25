@@ -1,5 +1,3 @@
-import 'package:equatable/equatable.dart';
-import 'package:hlvm_mobileapp/core/services/bruteforce_protection_service.dart';
 import 'package:hlvm_mobileapp/core/services/session_manager.dart';
 
 /// Базовый класс для состояний аутентификации
@@ -92,7 +90,7 @@ class AuthError extends AuthState {
 
 /// Результат проверки защиты от брутфорса
 class AuthBruteforceCheckResult extends AuthState {
-  final BruteforceCheckResult result;
+  final Map<String, dynamic> result;
 
   const AuthBruteforceCheckResult(this.result);
 

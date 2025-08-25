@@ -1,13 +1,20 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hlvm_mobileapp/core/services/server_settings_service.dart';
 
 class AuthService {
   final Dio _dio = Dio();
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   AuthService() {
+    _configureDio();
     addAuthInterceptor();
+  }
+
+  void _configureDio() {
+    _dio.options.connectTimeout = const Duration(seconds: 30);
+    _dio.options.receiveTimeout = const Duration(seconds: 30);
+    _dio.options.sendTimeout = const Duration(seconds: 30);
   }
 
   void addAuthInterceptor() {
@@ -47,23 +54,43 @@ class AuthService {
     );
   }
 
-  Future<String> get _baseUrl async {
-    final prefs = await SharedPreferences.getInstance();
-    final server = prefs.getString('server_address');
+  Future<String?> get _baseUrl async {
+    final serverSettings = ServerSettingsService();
+    final server = await serverSettings.getFullServerUrl();
+
     if (server != null && server.isNotEmpty) {
-      return server.endsWith('/api') ? server : '$server/api';
+      // Проверяем корректность URL
+      if (server.length > 200 ||
+          server.contains(' ') ||
+          server.contains('\n')) {
+        return null; // Возвращаем null вместо исключения
+      }
+      return server;
     }
-    throw Exception('Необходимо указать адрес сервера');
+
+    return null; // Возвращаем null вместо исключения
   }
 
   Future<Map<String, dynamic>> login(String username, String password) async {
     try {
       final baseUrl = await _baseUrl;
 
+      // Проверяем, что адрес сервера настроен
+      if (baseUrl == null) {
+        return {
+          'success': false,
+          'message': 'Необходимо указать адрес сервера в настройках',
+        };
+      }
+
       final response = await _dio.post(
         '$baseUrl/auth/token/',
         data: {'username': username, 'password': password},
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        options: Options(
+          headers: {'Content-Type': 'application/json'},
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
+        ),
       );
 
       if (response.statusCode == 200) {
@@ -83,17 +110,19 @@ class AuthService {
         return {'success': false, 'message': msg};
       }
     } catch (e) {
-      if (e is DioException && e.response?.data != null) {
-        final serverMsg = e.response?.data.toString();
-        return {'success': false, 'message': serverMsg};
+      if (e is DioException) {
+        if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout) {
+          return {'success': false, 'message': 'Таймаут соединения с сервером'};
+        }
+        if (e.response?.data != null) {
+          final serverMsg = e.response?.data.toString();
+          return {'success': false, 'message': serverMsg};
+        }
+        return {'success': false, 'message': 'Ошибка сети: ${e.message}'};
       }
-      if (e.toString().contains('Необходимо указать адрес сервера')) {
-        return {
-          'success': false,
-          'message': 'Необходимо указать адрес сервера в настройках',
-        };
-      }
-      return {'success': false, 'message': 'Ошибка $e'};
+      return {'success': false, 'message': 'Неожиданная ошибка: $e'};
     }
   }
 
@@ -114,10 +143,19 @@ class AuthService {
     try {
       final baseUrl = await _baseUrl;
 
+      // Проверяем, что адрес сервера настроен
+      if (baseUrl == null) {
+        throw Exception("Необходимо указать адрес сервера в настройках");
+      }
+
       final response = await _dio.post(
         '$baseUrl/auth/token/refresh/',
         data: {"refresh": refreshToken},
-        options: Options(headers: {'Content-Type': 'application/json'}),
+        options: Options(
+          headers: {'Content-Type': 'application/json'},
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
+        ),
       );
 
       final newAccessToken = response.data['access'];
@@ -144,6 +182,29 @@ class AuthService {
 
   Future<String?> getAccessToken() async {
     return await _secureStorage.read(key: 'access_token');
+  }
+
+  /// Проверяет, настроен ли сервер
+  Future<bool> checkServerConfiguration() async {
+    try {
+      final baseUrl = await _baseUrl;
+      return baseUrl != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Получает сообщение о состоянии настроек сервера
+  Future<String> getServerConfigurationMessage() async {
+    try {
+      final baseUrl = await _baseUrl;
+      if (baseUrl == null) {
+        return 'Необходимо указать адрес сервера в настройках';
+      }
+      return 'Сервер настроен: $baseUrl';
+    } catch (e) {
+      return 'Ошибка проверки настроек сервера';
+    }
   }
 
   Future<void> _clearTokens() async {

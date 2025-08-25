@@ -50,20 +50,20 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
         context: context,
         builder: (context) {
           return AlertDialog(
-            title: Text('Подтверждение'),
-            content: Text('Вы уверены, что хотите добавить этот чек?'),
+            title: const Text('Подтверждение'),
+            content: const Text('Вы уверены, что хотите добавить этот чек?'),
             actions: [
               TextButton(
                 onPressed: () {
                   Navigator.of(context).pop(false); // User canceled
                 },
-                child: Text('Cancel'),
+                child: const Text('Cancel'),
               ),
               ElevatedButton(
                 onPressed: () {
                   Navigator.of(context).pop(true); // User confirmed
                 },
-                child: Text('OK'),
+                child: const Text('OK'),
               ),
             ],
           );

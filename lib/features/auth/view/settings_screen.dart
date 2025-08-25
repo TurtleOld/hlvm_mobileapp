@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hlvm_mobileapp/core/services/server_settings_service.dart';
 import 'cache_info_widget.dart';
 import 'server_settings_screen.dart';
 
@@ -22,10 +22,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadServerAddress() async {
-    final prefs = await SharedPreferences.getInstance();
+    final serverSettings = ServerSettingsService();
+    final address = await serverSettings.getServerAddress();
     if (mounted) {
       setState(() {
-        _serverController.text = prefs.getString('server_address') ?? '';
+        _serverController.text = address ?? '';
       });
     }
   }
@@ -33,19 +34,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _saveServerAddress() async {
     if (!mounted) return;
 
+    final address = _serverController.text.trim();
+
+    // Валидация адреса
+    if (address.isEmpty) {
+      setState(() {
+        _message = 'Введите адрес сервера';
+      });
+      return;
+    }
+
+    // Проверяем, что адрес не содержит протокол
+    if (address.startsWith('http://') || address.startsWith('https://')) {
+      setState(() {
+        _message =
+            'Не вводите протокол (http:// или https://). Введите только домен или IP адрес';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _message = '';
     });
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('server_address', _serverController.text.trim());
+    try {
+      final serverSettings = ServerSettingsService();
+      await serverSettings.setServerAddress(address);
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        _message = 'Сервер сохранён';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _message = 'Сервер сохранён';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _message = 'Ошибка: $e';
+        });
+      }
     }
   }
 
@@ -69,24 +98,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Настройки сервера',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                        const Expanded(
+                          child: Text(
+                            'Настройки сервера',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                        TextButton.icon(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const ServerSettingsScreen(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.settings),
-                          label: const Text('Расширенные'),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: TextButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const ServerSettingsScreen(),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.settings),
+                            label: const Text('Расширенные'),
+                          ),
                         ),
                       ],
                     ),
@@ -95,6 +129,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       controller: _serverController,
                       decoration: const InputDecoration(
                         labelText: 'Адрес сервера',
+                        hintText: 'example.com или 192.168.1.100',
+                        helperText:
+                            'Введите только домен или IP адрес. API будет доступен по адресу: http://example.com/api',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -102,7 +139,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (_message.isNotEmpty)
                       Text(
                         _message,
-                        style: const TextStyle(color: Colors.green),
+                        style: TextStyle(
+                          color: _message.contains('Ошибка') ||
+                                  _message.contains('Не вводите')
+                              ? Colors.red
+                              : Colors.green,
+                        ),
                       ),
                     SizedBox(
                       width: double.infinity,

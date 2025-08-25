@@ -523,7 +523,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
               color: AppTheme.errorRed.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(
+            child: const Icon(
               Icons.logout,
               size: 60,
               color: AppTheme.errorRed,

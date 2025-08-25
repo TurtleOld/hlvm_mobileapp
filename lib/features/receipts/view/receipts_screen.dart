@@ -110,14 +110,24 @@ class _ReceiptScreenState extends State<ReceiptScreen>
       BuildContext context, Map<String, dynamic> receipt, String seller) {
     final totalSum = receipt['total_sum'];
 
-    // Отладочная информация
-    print('🔍 [DEBUG] Receipt data: $receipt');
-    print('🔍 [DEBUG] Products: ${receipt['product']}');
-    print('🔍 [DEBUG] Products type: ${receipt['product']?.runtimeType}');
-    print('🔍 [DEBUG] Products length: ${receipt['product']?.length}');
-    if (receipt['product'] != null && receipt['product'].isNotEmpty) {
-      print('🔍 [DEBUG] First product: ${receipt['product'][0]}');
-    }
+    // Получаем данные о продуктах
+    final products = receipt['product'] as List<dynamic>? ?? [];
+
+    // Создаем список продуктов
+    final productList = products.map((product) {
+      final productName = product['name'] ?? 'Неизвестный продукт';
+      final quantity = product['quantity'] ?? 1;
+      final price = product['price'] ?? 0.0;
+      final sum = product['sum'] ?? 0.0;
+
+      return _buildDetailItem(
+        icon: Icons.shopping_cart,
+        label: productName,
+        value: '$quantity x $price ₽ = $sum ₽',
+        isAmount: true,
+      );
+    }).toList();
+
     final dateString = receipt['receipt_date'];
     DateTime dateTime = DateTime.parse(dateString);
     String formattedDate = DateFormat('dd.MM.yyyy HH:mm').format(dateTime);
@@ -205,15 +215,7 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                     label: 'Товары',
                     value: '${receipt['product'].length} позиций',
                   ),
-                  ...receipt['product']
-                      .map<Widget>((product) => _buildDetailItem(
-                            icon: Icons.shopping_cart,
-                            label: product['product_name'] ?? 'Товар',
-                            value:
-                                '${product['quantity']} x ${product['price']} ₽ = ${product['amount']} ₽',
-                            isAmount: true,
-                          ))
-                      .toList(),
+                  ...productList,
                 ],
               ],
             ),
@@ -309,12 +311,23 @@ class _ReceiptScreenState extends State<ReceiptScreen>
       ),
       body: _isLoading ? _buildLoadingScreen() : _buildReceiptsList(),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => ImageCaptureScreen(),
-            ),
-          );
+        onPressed: () async {
+          try {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const ImageCaptureScreen(),
+              ),
+            );
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Ошибка при открытии экрана: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
         },
         icon: const Icon(Icons.add_a_photo),
         label: const Text('Добавить чек'),
@@ -426,12 +439,23 @@ class _ReceiptScreenState extends State<ReceiptScreen>
           ),
           const SizedBox(height: 32),
           ElevatedButton.icon(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => ImageCaptureScreen(),
-                ),
-              );
+            onPressed: () async {
+              try {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const ImageCaptureScreen(),
+                  ),
+                );
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Ошибка при открытии экрана: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
             },
             icon: const Icon(Icons.add_a_photo),
             label: const Text('Добавить чек'),
@@ -515,7 +539,7 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(
+                                const Icon(
                                   Icons.calendar_today,
                                   size: 14,
                                   color: AppTheme.textSecondary,
@@ -532,7 +556,7 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Icon(
+                                const Icon(
                                   Icons.access_time,
                                   size: 14,
                                   color: AppTheme.textSecondary,
@@ -600,7 +624,7 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Icon(
+                      const Icon(
                         Icons.touch_app,
                         size: 16,
                         color: AppTheme.textSecondary,

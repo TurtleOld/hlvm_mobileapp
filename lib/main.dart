@@ -22,74 +22,143 @@ import 'package:hlvm_mobileapp/core/services/session_provider.dart';
 import 'package:hlvm_mobileapp/core/services/cache_service.dart';
 import 'package:hlvm_mobileapp/core/services/app_startup_service.dart';
 import 'package:hlvm_mobileapp/core/services/security_manager_service.dart';
-import 'package:hlvm_mobileapp/core/services/secure_http_client.dart';
-import 'package:hlvm_mobileapp/core/constants/app_constants.dart';
+import 'package:hlvm_mobileapp/core/services/server_settings_service.dart';
+import 'package:hlvm_mobileapp/core/utils/logger.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Показываем экран загрузки сразу
-  runApp(const SplashScreen());
+    // Показываем splash screen
+    runApp(const SplashScreen());
 
-  // Инициализируем сервисы в фоне
-  await _initializeServices();
-
-  // Перезапускаем приложение с основным UI
-  runApp(await _createMainApp());
+    // Запускаем инициализацию сервисов в фоне
+    _initializeServices();
+  } catch (e) {
+    // В случае критической ошибки показываем fallback приложение
+    runApp(const FallbackApp());
+  }
 }
 
 Future<void> _initializeServices() async {
   try {
+    // Инициализируем TalkerService
     final talkerService = TalkerService();
     talkerService.initialize();
 
+    // Инициализируем SecurityManagerService
     final securityManager = SecurityManagerService();
     await securityManager.initializeSecurity();
 
-    final bool isLoggedIn = await checkLoggedIn();
-
+    // Инициализируем AuthService
     final authService = AuthService();
-    final sessionManager = SessionManager(authService: authService);
-    GlobalErrorHandler.setupDioErrorHandler(authService.dio);
 
-    final cacheService = CacheService();
-    final appStartupService = AppStartupService(cacheService: cacheService);
-    await appStartupService.initializeApp();
+    // Настраиваем обработчик ошибок
+    try {
+      GlobalErrorHandler.setupDioErrorHandler(authService.dio);
+    } catch (e) {
+      // Игнорируем ошибки настройки обработчика ошибок
+    }
 
-    // Сохраняем сервисы для использования в основном приложении
+    // Инициализируем CacheService
+    try {
+      CacheService();
+      // CacheService инициализируется автоматически в конструкторе
+    } catch (e) {
+      // Игнорируем ошибки инициализации кеша
+    }
+
+    // Очищаем некорректные настройки сервера
+    try {
+      final serverSettings = ServerSettingsService();
+      await serverSettings.clearInvalidSettings();
+
+      // Проверяем корректность оставшихся настроек
+      final isValid = await serverSettings.validateAllSettings();
+      if (!isValid) {
+        AppLogger.warning(
+            'Some server settings are still invalid after cleanup');
+      }
+    } catch (e) {
+      // Игнорируем ошибки очистки настроек
+    }
+
+    // Инициализируем AppStartupService с таймаутом
+    try {
+      final appStartupService = AppStartupService(cacheService: CacheService());
+      await appStartupService.initializeApp().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          // В случае таймаута продолжаем работу
+          return;
+        },
+      );
+    } catch (e) {
+      // Игнорируем ошибки инициализации startup сервиса
+    }
+
+    // Настраиваем карту сервисов
     _services = {
-      'isLoggedIn': isLoggedIn,
-      'talkerService': talkerService,
-      'authService': authService,
-      'sessionManager': sessionManager,
-      'cacheService': cacheService,
-      'securityManager': securityManager,
+      'talker': talkerService,
+      'security': securityManager,
+      'auth': authService,
+      'cache': CacheService(),
+      'startup': AppStartupService(cacheService: CacheService()),
     };
+
+    // Очищаем некорректные настройки в API сервисах
+    try {
+      final apiService = ApiService();
+      await apiService.clearInvalidServerSettings();
+    } catch (e) {
+      // Игнорируем ошибки очистки настроек
+    }
   } catch (e) {
-    // В случае ошибки устанавливаем значения по умолчанию
-    _services = {
-      'isLoggedIn': false,
-      'talkerService': TalkerService(),
-      'authService': AuthService(),
-      'sessionManager': SessionManager(authService: AuthService()),
-      'cacheService': CacheService(),
-      'securityManager': SecurityManagerService(),
-    };
+    // В случае ошибки инициализации сервисов продолжаем работу
   }
 }
 
 // Глобальная переменная для хранения сервисов
 Map<String, dynamic> _services = {};
 
-Future<MyApp> _createMainApp() async {
-  return MyApp(
-    isLoggedIn: _services['isLoggedIn'] ?? false,
-    talkerService: _services['talkerService'],
-    authService: _services['authService'],
-    sessionManager: _services['sessionManager'],
-    cacheService: _services['cacheService'],
-    securityManager: _services['securityManager'],
-  );
+Future<Widget> _createMainApp() async {
+  try {
+    if (_services.isNotEmpty) {
+      return MyApp(
+        isLoggedIn: _services['isLoggedIn'] ?? false,
+        isAppBlocked: _services['isAppBlocked'] ?? false,
+        talkerService: _services['talkerService'] ?? TalkerService(),
+        authService: _services['authService'] ?? AuthService(),
+        sessionManager: _services['sessionManager'] ??
+            SessionManager(authService: AuthService()),
+        cacheService: _services['cacheService'] ?? CacheService(),
+        securityManager:
+            _services['securityManager'] ?? SecurityManagerService(),
+      );
+    } else {
+      // Если сервисы не инициализированы, возвращаем приложение с базовыми сервисами
+      return MyApp(
+        isLoggedIn: false,
+        isAppBlocked: false,
+        talkerService: TalkerService(),
+        authService: AuthService(),
+        sessionManager: SessionManager(authService: AuthService()),
+        cacheService: CacheService(),
+        securityManager: SecurityManagerService(),
+      );
+    }
+  } catch (e) {
+    // В случае ошибки возвращаем приложение с базовыми сервисами
+    return MyApp(
+      isLoggedIn: false,
+      isAppBlocked: false,
+      talkerService: TalkerService(),
+      authService: AuthService(),
+      sessionManager: SessionManager(authService: AuthService()),
+      cacheService: CacheService(),
+      securityManager: SecurityManagerService(),
+    );
+  }
 }
 
 Future<bool> checkLoggedIn() async {
@@ -98,7 +167,10 @@ Future<bool> checkLoggedIn() async {
     final isLoggedIn = await storage.read(key: 'isLoggedIn');
     final accessToken = await storage.read(key: 'access_token');
     final refreshToken = await storage.read(key: 'refresh_token');
-    return isLoggedIn == 'true' && accessToken != null && refreshToken != null;
+
+    final result =
+        isLoggedIn == 'true' && accessToken != null && refreshToken != null;
+    return result;
   } catch (e) {
     return false;
   }
@@ -122,10 +194,14 @@ class _SplashScreenState extends State<SplashScreen>
 
   bool _isInitializationComplete = false;
   String _statusText = 'Инициализация...';
+  Timer? _statusTimer;
+  Timer? _timeoutTimer;
+  late DateTime _startTime;
 
   @override
   void initState() {
     super.initState();
+    _startTime = DateTime.now();
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 2000),
       vsync: this,
@@ -163,146 +239,240 @@ class _SplashScreenState extends State<SplashScreen>
     _animationController.forward();
     _pulseController.repeat(reverse: true);
 
-    Timer.periodic(const Duration(milliseconds: 500), (timer) {
-      if (_services.isNotEmpty && !_isInitializationComplete) {
-        timer.cancel();
-        _isInitializationComplete = true;
-        _transitionToMainApp();
+    // Запускаем таймер для обновления статуса
+    _startStatusUpdates();
+
+    // Запускаем таймер для проверки инициализации
+    _startInitializationCheck();
+
+    // Устанавливаем таймаут на 15 секунд
+    _timeoutTimer = Timer(const Duration(seconds: 15), () {
+      if (mounted && !_isInitializationComplete) {
+        _forceTransitionToMainApp();
       }
     });
+  }
 
-    Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+  void _startStatusUpdates() {
+    _statusTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
       if (mounted && !_isInitializationComplete) {
         _updateStatusText();
+
+        // Дополнительная проверка на зависание
+        if (DateTime.now().difference(_startTime).inSeconds > 20) {
+          timer.cancel();
+          if (mounted) {
+            _forceTransitionToMainApp();
+          }
+        }
       } else {
         timer.cancel();
       }
     });
   }
 
+  void _startInitializationCheck() {
+    Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      try {
+        // Проверяем, есть ли сервисы и не завершена ли инициализация
+        if (_services.isNotEmpty && !_isInitializationComplete) {
+          timer.cancel();
+          _isInitializationComplete = true;
+          _transitionToMainApp();
+        }
+
+        // Добавляем дополнительную проверку на таймаут
+        // Если прошло больше 10 секунд и сервисы не инициализированы,
+        // переходим к основному приложению
+        if (!_isInitializationComplete &&
+            DateTime.now().difference(_startTime).inSeconds > 10) {
+          timer.cancel();
+          _isInitializationComplete = true;
+          _transitionToMainApp();
+        }
+      } catch (e) {
+        if (mounted) {
+          _showFallbackApp();
+        }
+      }
+    });
+  }
+
+  void _forceTransitionToMainApp() {
+    try {
+      if (mounted) {
+        _isInitializationComplete = true;
+        _transitionToMainApp();
+      }
+    } catch (e) {
+      if (mounted) {
+        _showFallbackApp();
+      }
+    }
+  }
+
   void _transitionToMainApp() async {
-    if (_services.isNotEmpty) {
-      final mainApp = await _createMainApp();
-      runApp(mainApp);
+    if (mounted) {
+      try {
+        final mainApp = await _createMainApp();
+        if (mounted) {
+          runApp(mainApp);
+        }
+      } catch (e) {
+        if (mounted) {
+          _showFallbackApp();
+        }
+      }
+    }
+  }
+
+  void _showFallbackApp() {
+    try {
+      final fallbackApp = MyApp(
+        isLoggedIn: false,
+        isAppBlocked: false,
+        talkerService: TalkerService(),
+        authService: AuthService(),
+        sessionManager: SessionManager(authService: AuthService()),
+        cacheService: CacheService(),
+        securityManager: SecurityManagerService(),
+      );
+      runApp(fallbackApp);
+    } catch (e) {
+      // В случае критической ошибки показываем простой fallback
+      runApp(const FallbackApp());
     }
   }
 
   void _updateStatusText() {
-    if (mounted) {
-      final statuses = [
-        'Инициализация...',
-        'Загрузка сервисов...',
-        'Проверка безопасности...',
-        'Подготовка кеша...',
-        'Почти готово...',
-      ];
-
-      final currentIndex =
-          DateTime.now().millisecondsSinceEpoch ~/ 1500 % statuses.length;
-      setState(() {
-        _statusText = statuses[currentIndex];
-      });
+    try {
+      if (mounted) {
+        setState(() {
+          _statusText = 'Инициализация...';
+        });
+      }
+    } catch (e) {
+      // Игнорируем ошибки обновления статуса
     }
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
-    _pulseController.dispose();
-    super.dispose();
+    try {
+      _animationController.dispose();
+      _pulseController.dispose();
+      _statusTimer?.cancel();
+      _timeoutTimer?.cancel();
+      super.dispose();
+    } catch (e) {
+      // Игнорируем ошибки при dispose
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(
-          child: AnimatedBuilder(
-            animation: _animationController,
-            builder: (context, child) {
-              return FadeTransition(
-                opacity: _fadeAnimation,
-                child: Transform.scale(
-                  scale: _scaleAnimation.value,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      AnimatedBuilder(
-                        animation: _pulseAnimation,
-                        builder: (context, child) {
-                          return Transform.scale(
-                            scale: _pulseAnimation.value,
-                            child: Container(
-                              width: 120,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.green.shade100,
-                                    Colors.green.shade200
-                                  ],
-                                ),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.green.withValues(alpha: 0.3),
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 10),
-                                  ),
-                                ],
+    try {
+      return MaterialApp(
+        title: 'HLVM Mobile App',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+        ),
+        home: Scaffold(
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+              ),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Логотип или иконка
+                  AnimatedBuilder(
+                    animation: _scaleAnimation,
+                    builder: (context, child) {
+                      return Transform.scale(
+                        scale: _scaleAnimation.value,
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(60),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.3),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
                               ),
-                              child: const Icon(
-                                Icons.account_balance_wallet,
-                                size: 60,
-                                color: Colors.green,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 30),
-                      const Text(
-                        'HLVM Mobile',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        _statusText,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.black54,
-                        ),
-                      ),
-                      const SizedBox(height: 40),
-                      const SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Colors.green,
+                            ],
                           ),
-                          strokeWidth: 3,
+                          child: const Icon(
+                            Icons.security,
+                            size: 60,
+                            color: Color(0xFF1E3A8A),
+                          ),
                         ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
-                ),
-              );
-            },
+                  const SizedBox(height: 40),
+                  // Текст статуса
+                  AnimatedBuilder(
+                    animation: _fadeAnimation,
+                    builder: (context, child) {
+                      return Opacity(
+                        opacity: _fadeAnimation.value,
+                        child: Text(
+                          _statusText,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  // Индикатор загрузки
+                  AnimatedBuilder(
+                    animation: _pulseAnimation,
+                    builder: (context, child) {
+                      return Opacity(
+                        opacity: _pulseAnimation.value.clamp(0.0, 1.0),
+                        child: const SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: CircularProgressIndicator(
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                            strokeWidth: 3,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      // В случае ошибки показываем простой fallback
+      return const FallbackApp();
+    }
   }
 }
 
 class MyApp extends StatefulWidget {
   final bool isLoggedIn;
+  final bool isAppBlocked;
   final TalkerService talkerService;
   final AuthService authService;
   final SessionManager sessionManager;
@@ -312,6 +482,7 @@ class MyApp extends StatefulWidget {
   const MyApp({
     super.key,
     required this.isLoggedIn,
+    required this.isAppBlocked,
     required this.talkerService,
     required this.authService,
     required this.sessionManager,
@@ -326,6 +497,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
+    // Приложение больше не может быть заблокировано
     return MultiBlocProvider(
       providers: [
         BlocProvider<TalkerBloc>(
@@ -338,9 +510,6 @@ class _MyAppState extends State<MyApp> {
             authService: widget.authService,
             talkerBloc: context.read<TalkerBloc>(),
             sessionManager: widget.sessionManager,
-            secureHttpClient: SecureHttpClient(
-              sessionManager: widget.sessionManager,
-            ),
           )..add(const CheckAuthStatus()),
         ),
         BlocProvider<FinanceAccountBloc>(
@@ -381,6 +550,8 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
+
+// Экран блокировки приложения больше не нужен
 
 class HomePage extends StatefulWidget {
   final int selectedIndex;
@@ -447,6 +618,97 @@ class _HomePageState extends State<HomePage> {
         ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
+      ),
+    );
+  }
+}
+
+// Fallback приложение для случаев критических ошибок
+class FallbackApp extends StatelessWidget {
+  const FallbackApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'HLVM Mobile',
+      theme: ThemeData(
+        primarySwatch: Colors.green,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      home: const FallbackScreen(),
+    );
+  }
+}
+
+// Fallback экран для случаев критических ошибок
+class FallbackScreen extends StatelessWidget {
+  const FallbackScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.red.shade50,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade100,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.error_outline,
+                  size: 60,
+                  color: Colors.red.shade600,
+                ),
+              ),
+              const SizedBox(height: 32),
+              Text(
+                'Ошибка инициализации',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red.shade800,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Произошла ошибка при запуске приложения. Попробуйте перезапустить.',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.red.shade700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                onPressed: () {
+                  // Перезапускаем приложение
+                  Navigator.of(context).pushReplacementNamed('/');
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Перезапустить'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade600,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

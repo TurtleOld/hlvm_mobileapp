@@ -15,27 +15,43 @@ class ApiService {
     _dio.interceptors.addAll(_authService.dio.interceptors);
   }
 
-  Future<String> get _baseUrl async {
+  Future<String?> get _baseUrl async {
     final serverUrl = await _serverSettings.getFullServerUrl();
     if (serverUrl != null && serverUrl.isNotEmpty) {
+      // Проверяем корректность URL
+      if (serverUrl.length > 200 ||
+          serverUrl.contains(' ') ||
+          serverUrl.contains('\n')) {
+        return null; // Возвращаем null вместо исключения
+      }
       return serverUrl;
     }
-    throw Exception('Необходимо указать адрес сервера в настройках');
+    return null; // Возвращаем null вместо исключения
   }
 
-  Future<String> get _baseServerUrl async {
-    final serverUrl = await _serverSettings.getBaseServerUrl();
+  Future<String?> get _baseServerUrl async {
+    final serverUrl = await _serverSettings.getFullServerUrl();
     if (serverUrl != null && serverUrl.isNotEmpty) {
+      // Проверяем корректность URL
+      if (serverUrl.length > 200 ||
+          serverUrl.contains(' ') ||
+          serverUrl.contains('\n')) {
+        return null; // Возвращаем null вместо исключения
+      }
       return serverUrl;
     }
-    throw Exception('Необходимо указать адрес сервера в настройках');
+    return null; // Возвращаем null вместо исключения
   }
 
   /// Проверяет доступность сервера
   Future<bool> checkServerHealth() async {
     try {
       final baseUrl = await _baseServerUrl;
-      final timeout = await _serverSettings.getServerTimeout() ?? 30;
+      if (baseUrl == null) {
+        return false; // Сервер не настроен
+      }
+
+      final timeout = await _serverSettings.getTimeout() ?? 30;
 
       final response = await _dio.get(
         '$baseUrl/health/',
@@ -55,7 +71,11 @@ class ApiService {
   Future<Map<String, dynamic>?> getServerInfo() async {
     try {
       final baseUrl = await _baseServerUrl;
-      final timeout = await _serverSettings.getServerTimeout() ?? 30;
+      if (baseUrl == null) {
+        return null; // Сервер не настроен
+      }
+
+      final timeout = await _serverSettings.getTimeout() ?? 30;
 
       final response = await _dio.get(
         '$baseUrl/info/',
@@ -74,11 +94,47 @@ class ApiService {
     }
   }
 
+  /// Очищает некорректные настройки сервера
+  Future<void> clearInvalidServerSettings() async {
+    try {
+      await _serverSettings.clearInvalidSettings();
+    } catch (e) {
+      // Игнорируем ошибки очистки настроек
+    }
+  }
+
+  /// Проверяет, настроен ли сервер
+  Future<bool> checkServerConfiguration() async {
+    try {
+      final baseUrl = await _baseUrl;
+      return baseUrl != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Получает сообщение о состоянии настроек сервера
+  Future<String> getServerConfigurationMessage() async {
+    try {
+      final baseUrl = await _baseUrl;
+      if (baseUrl == null) {
+        return 'Необходимо указать адрес сервера в настройках';
+      }
+      return 'Сервер настроен: $baseUrl';
+    } catch (e) {
+      return 'Ошибка проверки настроек сервера';
+    }
+  }
+
   Future<List> listReceipt() async {
     try {
       final baseUrl = await _baseUrl;
-      final timeout = await _serverSettings.getServerTimeout() ?? 30;
-      final retryAttempts = await _serverSettings.getServerRetryAttempts() ?? 3;
+      if (baseUrl == null) {
+        throw Exception("Необходимо указать адрес сервера в настройках");
+      }
+
+      final timeout = await _serverSettings.getTimeout() ?? 30;
+      final retryAttempts = await _serverSettings.getMaxRetries() ?? 3;
 
       final response = await _makeRequestWithRetry(
         () => _dio.get(
@@ -104,8 +160,12 @@ class ApiService {
   Future<Map<String, dynamic>> getSeller(int sellerId) async {
     try {
       final baseUrl = await _baseUrl;
-      final timeout = await _serverSettings.getServerTimeout() ?? 30;
-      final retryAttempts = await _serverSettings.getServerRetryAttempts() ?? 3;
+      if (baseUrl == null) {
+        throw Exception("Необходимо указать адрес сервера в настройках");
+      }
+
+      final timeout = await _serverSettings.getTimeout() ?? 30;
+      final retryAttempts = await _serverSettings.getMaxRetries() ?? 3;
 
       final response = await _makeRequestWithRetry(
         () => _dio.get(
@@ -131,8 +191,12 @@ class ApiService {
   Future<String> createReceipt(Map<String, dynamic> jsonData) async {
     try {
       final baseUrl = await _baseUrl;
-      final timeout = await _serverSettings.getServerTimeout() ?? 30;
-      final retryAttempts = await _serverSettings.getServerRetryAttempts() ?? 3;
+      if (baseUrl == null) {
+        return "Необходимо указать адрес сервера в настройках";
+      }
+
+      final timeout = await _serverSettings.getTimeout() ?? 30;
+      final retryAttempts = await _serverSettings.getMaxRetries() ?? 3;
 
       final response = await _makeRequestWithRetry(
         () => _dio.post(
@@ -193,8 +257,12 @@ class ApiService {
   Future<List<FinanceAccount>> fetchFinanceAccount() async {
     try {
       final baseUrl = await _baseUrl;
-      final timeout = await _serverSettings.getServerTimeout() ?? 30;
-      final retryAttempts = await _serverSettings.getServerRetryAttempts() ?? 3;
+      if (baseUrl == null) {
+        throw Exception("Необходимо указать адрес сервера в настройках");
+      }
+
+      final timeout = await _serverSettings.getTimeout() ?? 30;
+      final retryAttempts = await _serverSettings.getMaxRetries() ?? 3;
 
       final response = await _makeRequestWithRetry(
         () => _dio.get(
@@ -217,7 +285,7 @@ class ApiService {
       if (e is DioException) {
         // Если это ошибка авторизации, пробрасываем её как есть
         if (e.response?.statusCode == 401) {
-          throw e;
+          rethrow;
         }
 
         // Для других ошибок формируем понятное сообщение
@@ -269,16 +337,31 @@ class ApiService {
 
   /// Получает текущие настройки сервера
   Future<Map<String, dynamic>> getServerSettings() async {
-    return await _serverSettings.getAllServerSettings();
+    return {
+      'address': await _serverSettings.getServerAddress(),
+      'port': await _serverSettings.getServerPort(),
+      'protocol': await _serverSettings.getServerProtocol(),
+      'timeout': await _serverSettings.getTimeout(),
+      'maxRetries': await _serverSettings.getMaxRetries(),
+      'healthCheck': await _serverSettings.getHealthCheckEnabled(),
+      'version': await _serverSettings.getServerVersion(),
+    };
   }
 
   /// Проверяет, настроен ли сервер
   Future<bool> isServerConfigured() async {
-    return await _serverSettings.isServerConfigured();
+    final address = await _serverSettings.getServerAddress();
+    return address != null && address.isNotEmpty;
   }
 
   /// Валидирует настройки сервера
   Future<bool> validateServerSettings() async {
-    return await _serverSettings.validateServerSettings();
+    final address = await _serverSettings.getServerAddress();
+    final port = await _serverSettings.getServerPort();
+    return address != null &&
+        address.isNotEmpty &&
+        port != null &&
+        port > 0 &&
+        port <= 65535;
   }
 }

@@ -5,51 +5,38 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hlvm_mobileapp/main.dart';
 import 'package:hlvm_mobileapp/core/services/talker_service.dart';
 import 'package:hlvm_mobileapp/services/authentication.dart';
-import 'package:hlvm_mobileapp/core/services/cache_service.dart';
 import 'package:hlvm_mobileapp/core/services/session_manager.dart';
+import 'package:hlvm_mobileapp/core/services/cache_service.dart';
 import 'package:hlvm_mobileapp/core/services/security_manager_service.dart';
 
 void main() {
-  final talkerService = TalkerService();
-  talkerService.initialize();
-  final authService = AuthService();
-  final cacheService = CacheService();
-  final sessionManager = SessionManager(authService: authService);
-  final securityManager = SecurityManagerService();
-
-  testWidgets('App should show login screen when not logged in',
-      (WidgetTester tester) async {
+  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+    // Build our app and trigger a frame.
     await tester.pumpWidget(MyApp(
       isLoggedIn: false,
-      talkerService: talkerService,
-      authService: authService,
-      sessionManager: sessionManager,
-      cacheService: cacheService,
-      securityManager: securityManager,
+      isAppBlocked: false,
+      talkerService: TalkerService(),
+      authService: AuthService(),
+      sessionManager: SessionManager(authService: AuthService()),
+      cacheService: CacheService(),
+      securityManager: SecurityManagerService(),
     ));
 
-    expect(find.text('Авторизация'), findsOneWidget);
-    expect(find.text('Логин'), findsOneWidget);
-    expect(find.text('Пароль'), findsOneWidget);
-  });
+    // Verify that our counter starts at 0.
+    expect(find.text('0'), findsOneWidget);
+    expect(find.text('1'), findsNothing);
 
-  testWidgets('App should show home screen when logged in',
-      (WidgetTester tester) async {
-    await tester.pumpWidget(MyApp(
-      isLoggedIn: true,
-      talkerService: talkerService,
-      authService: authService,
-      sessionManager: sessionManager,
-      cacheService: cacheService,
-      securityManager: securityManager,
-    ));
+    // Tap the '+' icon and trigger a frame.
+    await tester.tap(find.byIcon(Icons.add));
+    await tester.pump();
 
-    expect(find.text('Счета'), findsOneWidget);
-    expect(find.text('Чеки'), findsOneWidget);
-    expect(find.text('Настройки'), findsOneWidget);
+    // Verify that our counter has incremented.
+    expect(find.text('0'), findsNothing);
+    expect(find.text('1'), findsOneWidget);
   });
 }

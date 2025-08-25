@@ -1,81 +1,37 @@
 import 'dart:io';
+import 'dart:async';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:hlvm_mobileapp/services/api.dart';
-import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:hlvm_mobileapp/core/services/session_manager.dart';
 import 'package:hlvm_mobileapp/core/services/session_provider.dart';
 import 'package:hlvm_mobileapp/features/auth/view/settings_screen.dart';
-import 'package:hlvm_mobileapp/features/receipts/view/receipts_screen.dart';
 import 'package:hlvm_mobileapp/main.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:hlvm_mobileapp/core/theme/app_theme.dart';
 import 'package:hlvm_mobileapp/core/utils/logger.dart';
-import 'package:hlvm_mobileapp/core/utils/error_handler.dart';
-
-// Функция для логирования в файл
-Future<void> logToFile(String message) async {
-  try {
-    final directory = await getApplicationDocumentsDirectory();
-    final logFile = File('${directory.path}/receipt_processing.log');
-
-    final timestamp = DateTime.now().toIso8601String();
-    final logEntry = '[$timestamp] $message\n';
-
-    await logFile.writeAsString(logEntry, mode: FileMode.append);
-  } catch (e) {
-    AppLogger.error('Ошибка записи в лог', e);
-  }
-}
-
-// Функция для очистки лог файла
-Future<void> clearLogFile() async {
-  try {
-    final directory = await getApplicationDocumentsDirectory();
-    final logFile = File('${directory.path}/receipt_processing.log');
-
-    if (await logFile.exists()) {
-      await logFile.delete();
-      AppLogger.info('Лог файл очищен');
-    }
-  } catch (e) {
-    AppLogger.error('Ошибка очистки лог файла', e);
-  }
-}
-
-/// Fallback метод для выхода из аккаунта когда SessionManager недоступен
-Future<void> _handleLogoutFallback(BuildContext context) async {
-  try {
-    const storage = FlutterSecureStorage();
-    await storage.delete(key: 'access_token');
-    await storage.delete(key: 'refresh_token');
-    await storage.delete(key: 'isLoggedIn');
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Сессия истекла. Войдите снова.')),
-      );
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-    }
-  } catch (e) {
-    AppLogger.error('Ошибка при fallback выходе из аккаунта', e);
-  }
-}
+import 'package:hlvm_mobileapp/core/services/server_settings_service.dart';
 
 class ImageCaptureScreen extends StatefulWidget {
   const ImageCaptureScreen({super.key});
 
   @override
-  State<ImageCaptureScreen> createState() => _ImageCaptureScreenState();
+  State<ImageCaptureScreen> createState() {
+    try {
+      return _ImageCaptureScreenState();
+    } catch (e) {
+      AppLogger.error('Ошибка создания состояния ImageCaptureScreen: $e');
+      rethrow;
+    }
+  }
 }
 
 class _ImageCaptureScreenState extends State<ImageCaptureScreen>
     with TickerProviderStateMixin {
-  final ApiService _apiService = ApiService();
+  late final ApiService _apiService;
   final String _responseDataUrl = '';
   String? _dataUrl;
   bool _isLoading = false;
@@ -85,138 +41,175 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
   late Animation<double> _scaleAnimation;
   late Animation<double> _pulseAnimation;
 
-  final ImagePicker _picker = ImagePicker();
+  late final ImagePicker _picker;
+
+  _ImageCaptureScreenState() {
+    try {
+      _apiService = ApiService();
+      _picker = ImagePicker();
+    } catch (e) {
+      AppLogger.error('Ошибка создания сервисов: $e');
+      rethrow;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    // SessionManager будет получен из контекста при необходимости
-    _animationController = AnimationController(
-      duration: AppStyles.defaultAnimationDuration,
-      vsync: this,
-    );
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    );
+    try {
+      // SessionManager будет получен из контекста при необходимости
+      _animationController = AnimationController(
+        duration: const Duration(milliseconds: 200), // Уменьшаем время анимации
+        vsync: this,
+      );
+      _pulseController = AnimationController(
+        duration:
+            const Duration(milliseconds: 2000), // Увеличиваем время пульсации
+        vsync: this,
+      );
 
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
+      _fadeAnimation = Tween<double>(
+        begin: 0.0,
+        end: 1.0,
+      ).animate(CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOut, // Упрощаем кривую анимации
+      ));
 
-    _scaleAnimation = Tween<double>(
-      begin: 0.8,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.elasticOut,
-    ));
+      _scaleAnimation = Tween<double>(
+        begin: 0.9,
+        end: 1.0,
+      ).animate(CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOut, // Упрощаем кривую анимации
+      ));
 
-    _pulseAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.1,
-    ).animate(CurvedAnimation(
-      parent: _pulseController,
-      curve: Curves.easeInOut,
-    ));
+      _pulseAnimation = Tween<double>(
+        begin: 1.0,
+        end: 1.05, // Уменьшаем масштаб пульсации
+      ).animate(CurvedAnimation(
+        parent: _pulseController,
+        curve: Curves.easeInOut,
+      ));
 
-    _animationController.forward();
-    _pulseController.repeat(reverse: true);
+      // Запускаем анимации с задержкой для улучшения производительности
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          _animationController.forward();
+          _pulseController.repeat(reverse: true);
+        }
+      });
+    } catch (e) {
+      AppLogger.error('Ошибка инициализации ImageCaptureScreen: $e');
+    }
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
-    _pulseController.dispose();
+    try {
+      _animationController.dispose();
+      _pulseController.dispose();
+    } catch (e) {
+      AppLogger.error(
+          'Ошибка при освобождении ресурсов ImageCaptureScreen: $e');
+    }
     super.dispose();
   }
 
   Future<void> _captureImage(ImageSource source) async {
-    setState(() {
-      _isLoading = true;
-    });
+    try {
+      setState(() {
+        _isLoading = true;
+      });
 
-    // Сохраняем контекст до async операций
-    final currentContext = context;
+      // Сохраняем контекст до async операций
+      final currentContext = context;
 
-    // Проверяем аутентификацию перед началом обработки
-    if (!SessionProvider.hasSessionProvider(currentContext)) {
-      // Если SessionProvider недоступен, используем прямую проверку
-      final storage = const FlutterSecureStorage();
-      final accessToken = await storage.read(key: 'access_token');
-      if (accessToken == null) {
+      // Добавляем таймаут для предотвращения зависания
+      const timeoutDuration = Duration(seconds: 30);
+
+      // Проверяем аутентификацию перед началом обработки
+      if (!SessionProvider.hasSessionProvider(currentContext)) {
+        // Если SessionProvider недоступен, используем прямую проверку
+        const storage = FlutterSecureStorage();
+        final accessToken = await storage.read(key: 'access_token');
+        if (accessToken == null) {
+          if (mounted) {
+            _showSessionExpiredDialog(currentContext);
+          }
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+      } else {
+        final sessionManager = SessionProvider.maybeOf(currentContext);
+        if (sessionManager == null ||
+            !await sessionManager.checkAuthenticationWithUI(currentContext)) {
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final selectedAccount = prefs.getInt('selectedAccountId');
+
+      if (selectedAccount == null || selectedAccount == 0) {
         if (mounted) {
           ScaffoldMessenger.of(currentContext).showSnackBar(
-            const SnackBar(content: Text('Сессия истекла. Войдите снова.')),
+            const SnackBar(content: Text('Сначала выберите финансовый счет')),
           );
-          Navigator.of(currentContext)
-              .pushNamedAndRemoveUntil('/login', (route) => false);
         }
         setState(() {
           _isLoading = false;
         });
         return;
       }
-    } else {
-      final sessionManager = SessionProvider.maybeOf(currentContext);
-      if (sessionManager == null ||
-          !await sessionManager.checkAuthenticationWithUI(currentContext)) {
+
+      // Проверяем наличие GitHub токена
+      final githubToken = await getGithubToken();
+      if (githubToken == null || githubToken.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(currentContext).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'GitHub API токен не настроен. Перейдите в настройки и добавьте токен GitHub.'),
+            ),
+          );
+        }
         setState(() {
           _isLoading = false;
         });
         return;
       }
-    }
 
-    final prefs = await SharedPreferences.getInstance();
-    final selectedAccount = prefs.getInt('selectedAccountId');
+      // Выбираем изображение с таймаутом
+      final XFile? image = await _picker
+          .pickImage(
+            source: source,
+            maxWidth: 1920, // Ограничиваем размер для производительности
+            maxHeight: 1920,
+            imageQuality: 85, // Снижаем качество для ускорения
+          )
+          .timeout(timeoutDuration);
 
-    if (selectedAccount == null || selectedAccount == 0) {
-      if (mounted) {
-        ScaffoldMessenger.of(currentContext).showSnackBar(
-          const SnackBar(content: Text('Сначала выберите финансовый счет')),
-        );
-      }
-      setState(() {
-        _isLoading = false;
-      });
-      return;
-    }
-
-    // Проверяем наличие GitHub токена
-    final githubToken = await getGithubToken();
-    if (githubToken == null || githubToken.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(currentContext).showSnackBar(
-          const SnackBar(
-            content: Text(
-                'GitHub API токен не настроен. Перейдите в настройки и добавьте токен GitHub.'),
-          ),
-        );
-      }
-      setState(() {
-        _isLoading = false;
-      });
-      return;
-    }
-
-    try {
-      final XFile? image = await _picker.pickImage(source: source);
       if (!mounted) return;
 
       if (image != null) {
-        final String dataUrl = await getImageDataUrl(image.path, 'jpg');
+        // Обрабатываем изображение с таймаутом
+        final String dataUrl =
+            await getImageDataUrl(image.path, 'jpg').timeout(timeoutDuration);
         if (!mounted) return;
 
         setState(() {
           _dataUrl = dataUrl;
         });
 
-        final Map<String, dynamic> jsonData = await getJsonReceipt(dataUrl);
+        // Получаем JSON с таймаутом
+        final Map<String, dynamic> jsonData =
+            await getJsonReceipt(dataUrl).timeout(timeoutDuration);
         if (!mounted) return;
 
         if (jsonData.containsKey('Error')) {
@@ -233,8 +226,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                   await sessionManager.logoutOnSessionExpired(currentContext);
                 }
               } else {
-                // Fallback: прямой выход из аккаунта
-                await _handleLogoutFallback(currentContext);
+                // Fallback: показываем диалог истечения сессии
+                _showSessionExpiredDialog(currentContext);
               }
             }
             setState(() {
@@ -279,295 +272,512 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
           return;
         }
 
-        try {
-          await _apiService.createReceipt(jsonData);
+        // Создаем чек с таймаутом
+        await _apiService.createReceipt(jsonData).timeout(timeoutDuration);
 
-          if (mounted) {
-            ScaffoldMessenger.of(currentContext).showSnackBar(
-              const SnackBar(content: Text('Чек был успешно загружен')),
-            );
-            await Future.delayed(const Duration(milliseconds: 500));
-            Navigator.of(currentContext).pushAndRemoveUntil(
-              MaterialPageRoute(
-                  builder: (context) => const HomePage(selectedIndex: 1)),
-              (route) => false,
-            );
-          }
-        } catch (e) {
-          await logToFile('❌ [_captureImage] Ошибка при создании чека: $e');
-          await logToFile(
-              '🔍 [_captureImage] Данные, отправленные на сервер: $jsonData');
-          String errorMsg = 'Ошибка при добавлении чека: $e';
-          if (e is DioException) {
-            await logToFile(
-                '🔍 [_captureImage] DioException при создании чека: ${e.type}');
-            await logToFile(
-                '🔍 [_captureImage] DioException статус: ${e.response?.statusCode}');
-            await logToFile(
-                '🔍 [_captureImage] DioException данные: ${e.response?.data}');
-
-            if (e.response?.statusCode == 401) {
-              await logToFile(
-                  '❌ [_captureImage] Ошибка авторизации при создании чека');
-              if (mounted) {
-                if (SessionProvider.hasSessionProvider(currentContext)) {
-                  final sessionManager =
-                      SessionProvider.maybeOf(currentContext);
-                  if (sessionManager != null) {
-                    await sessionManager.logoutOnSessionExpired(currentContext);
-                  }
-                } else {
-                  await _handleLogoutFallback(currentContext);
-                }
-              }
-              setState(() {
-                _isLoading = false;
-              });
-              return;
-            }
-            if (e.response?.statusCode == 400) {
-              final data = e.response?.data;
-              await logToFile('🔍 [_captureImage] Данные ошибки 400: $data');
-              if (data is Map && data['detail'] != null) {
-                errorMsg = data['detail'].toString();
-              } else if (data != null) {
-                errorMsg = data.toString();
-              }
-            }
-          }
-          if (mounted) {
-            ScaffoldMessenger.of(currentContext).showSnackBar(
-              SnackBar(content: Text(errorMsg)),
-            );
-            await Future.delayed(const Duration(milliseconds: 500));
-            Navigator.of(currentContext).pushReplacement(
-              MaterialPageRoute(builder: (context) => const ReceiptScreen()),
-            );
-          }
-        }
-      }
-    } catch (e) {
-      await logToFile('❌ [_captureImage] Общая ошибка: $e');
-      if (e is DioException) {
-        final status = e.response?.statusCode;
-        final serverMsg = e.response?.data?.toString() ?? '';
-
-        if (status == 401) {
-          await logToFile('❌ [_captureImage] Ошибка авторизации в общем блоке');
-          if (mounted) {
-            if (SessionProvider.hasSessionProvider(currentContext)) {
-              final sessionManager = SessionProvider.maybeOf(currentContext);
-              if (sessionManager != null) {
-                await sessionManager.logoutOnSessionExpired(currentContext);
-              }
-            } else {
-              await _handleLogoutFallback(currentContext);
-            }
-          }
-          return;
-        } else if (status == 400) {
-          String detailMsg = '';
-          final data = e.response?.data;
-          if (data is Map && data['detail'] != null) {
-            detailMsg = data['detail'].toString();
-          } else if (data != null) {
-            detailMsg = data.toString();
-          }
-          await logToFile('🔍 [_captureImage] Детали ошибки 400: $detailMsg');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Ошибка запроса: $detailMsg')),
-            );
-          }
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Ошибка: $serverMsg')),
-            );
-          }
-        }
-      } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Неизвестная ошибка: $e')),
+          ScaffoldMessenger.of(currentContext).showSnackBar(
+            const SnackBar(content: Text('Чек был успешно загружен')),
+          );
+          await Future.delayed(const Duration(milliseconds: 500));
+          Navigator.of(currentContext).pushAndRemoveUntil(
+            MaterialPageRoute(
+                builder: (context) => const HomePage(selectedIndex: 1)),
+            (route) => false,
           );
         }
       }
+    } on TimeoutException catch (e) {
+      AppLogger.error('Таймаут операции: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Операция превысила время ожидания. Попробуйте еще раз.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      AppLogger.error('Общая ошибка в _captureImage: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Произошла ошибка: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.backgroundColor,
-      appBar: AppBar(
-        title: const Text('Обработка фото чека'),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            onPressed: () async {
-              try {
-                final directory = await getApplicationDocumentsDirectory();
-                final logFile =
-                    File('${directory.path}/receipt_processing.log');
-
-                if (await logFile.exists()) {
-                  final logContent = await logFile.readAsString();
-                  if (mounted) {
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Логи обработки'),
-                        content: SingleChildScrollView(
-                          child: SelectableText(logContent),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Закрыть'),
-                          ),
-                          TextButton(
-                            onPressed: () async {
-                              await clearLogFile();
-                              if (mounted) {
-                                Navigator.of(context).pop();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Логи очищены')),
-                                );
-                              }
-                            },
-                            child: const Text('Очистить'),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-                } else {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Лог файл не найден')),
-                    );
-                  }
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Ошибка чтения логов: $e')),
-                  );
-                }
-              }
-            },
-            tooltip: 'Просмотр логов',
+  /// Показывает диалог истечения сессии с кнопкой "Войти снова"
+  void _showSessionExpiredDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: AppTheme.errorRed,
+                size: 24,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Сессия истекла',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-      body: _isLoading ? _buildLoadingScreen() : _buildMainContent(),
-    );
-  }
-
-  Widget _buildLoadingScreen() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: AppStyles.balanceCardGradient,
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedBuilder(
-              animation: _pulseAnimation,
-              builder: (context, child) {
-                return Transform.scale(
-                  scale: _pulseAnimation.value,
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.receipt_long,
-                      size: 60,
-                      color: Colors.white,
-                    ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Ваша сессия в приложении истекла, пожалуйста, войдите снова',
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.errorRed.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppTheme.errorRed.withValues(alpha: 0.3),
+                    width: 1,
                   ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: AppTheme.errorRed,
+                      size: 16,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Для продолжения работы необходимо войти в систему',
+                        style: TextStyle(
+                          color: AppTheme.errorRed,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Закрываем диалог
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                  '/login',
+                  (route) => false,
                 );
               },
-            ),
-            const SizedBox(height: 32),
-            const Text(
-              'Обрабатываем чек...',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
+              style: TextButton.styleFrom(
+                backgroundColor: AppTheme.errorRed,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Пожалуйста, подождите',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white70,
+              child: const Text(
+                'Войти снова',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-            const SizedBox(height: 32),
-            const CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              strokeWidth: 3,
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMainContent() {
-    return AnimatedBuilder(
-      animation: _fadeAnimation,
-      builder: (context, child) {
-        return FadeTransition(
-          opacity: _fadeAnimation,
-          child: ScaleTransition(
-            scale: _scaleAnimation,
-            child: SingleChildScrollView(
-              padding: AppStyles.defaultPadding,
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  _buildHeaderSection(),
-                  const SizedBox(height: 40),
-                  _buildActionButtons(),
-                  const SizedBox(height: 40),
-                  _buildInfoSection(),
-                  if (_dataUrl != null) ...[
-                    const SizedBox(height: 20),
-                    _buildDataUrlSection(),
-                  ],
-                ],
-              ),
-            ),
-          ),
         );
       },
     );
   }
 
+  @override
+  Widget build(BuildContext context) {
+    try {
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        appBar: AppBar(
+          title: const Text('Обработка фото чека'),
+          elevation: 0,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.bug_report),
+              onPressed: () async {
+                try {
+                  final directory = await getApplicationDocumentsDirectory();
+                  final logFile =
+                      File('${directory.path}/receipt_processing.log');
+
+                  if (await logFile.exists()) {
+                    final logContent = await logFile.readAsString();
+                    if (mounted) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Логи обработки'),
+                          content: SingleChildScrollView(
+                            child: SelectableText(logContent),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('Закрыть'),
+                            ),
+                            TextButton(
+                              onPressed: () async {
+                                // await clearLogFile(); // Удалено
+                                if (mounted) {
+                                  Navigator.of(context).pop();
+                                  // ScaffoldMessenger.of(context).showSnackBar( // Удалено
+                                  //     const SnackBar( // Удалено
+                                  //         content: Text('Логи очищены')), // Удалено
+                                  // ); // Удалено
+                                }
+                              },
+                              child: const Text('Очистить'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Лог файл не найден')),
+                      );
+                    }
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Ошибка чтения логов: $e')),
+                    );
+                  }
+                }
+              },
+              tooltip: 'Просмотр логов',
+            ),
+          ],
+        ),
+        body: _isLoading ? _buildLoadingScreen() : _buildMainContent(),
+      );
+    } catch (e) {
+      AppLogger.error('Ошибка построения ImageCaptureScreen: $e');
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        appBar: AppBar(
+          title: const Text('Обработка фото чека'),
+          elevation: 0,
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Colors.red,
+              ),
+              SizedBox(height: 16),
+              Text(
+                'Ошибка загрузки экрана',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Попробуйте перезапустить приложение',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildLoadingScreen() {
+    try {
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppTheme.primaryGreen, AppTheme.primaryLightGreen],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedBuilder(
+                animation: _pulseAnimation,
+                builder: (context, child) {
+                  return Transform.scale(
+                    scale: _pulseAnimation.value,
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.receipt_long,
+                        size: 60,
+                        color: Colors.white,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 32),
+              const Text(
+                'Обрабатываем чек...',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Пожалуйста, подождите',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 32),
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                strokeWidth: 3,
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      AppLogger.error('Ошибка построения экрана загрузки: $e');
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [AppTheme.primaryGreen, AppTheme.primaryLightGreen],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.receipt_long,
+                size: 60,
+                color: Colors.white,
+              ),
+              SizedBox(height: 32),
+              Text(
+                'Загрузка...',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: 32),
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                strokeWidth: 3,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildMainContent() {
+    try {
+      return AnimatedBuilder(
+        animation: _fadeAnimation,
+        builder: (context, child) {
+          return FadeTransition(
+            opacity: _fadeAnimation,
+            child: ScaleTransition(
+              scale: _scaleAnimation,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 20),
+                    _buildHeaderSection(),
+                    const SizedBox(height: 40),
+                    _buildActionButtons(),
+                    const SizedBox(height: 40),
+                    _buildInfoSection(),
+                    if (_dataUrl != null) ...[
+                      const SizedBox(height: 20),
+                      _buildDataUrlSection(),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      AppLogger.error('Ошибка построения основного контента: $e');
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(20.0),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppTheme.primaryGreen, AppTheme.primaryLightGreen],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.receipt_long,
+                    size: 40,
+                    color: Colors.white,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Загрузка чека',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Сфотографируйте или выберите чек для автоматической обработки',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 40),
+            Container(
+              padding: const EdgeInsets.all(20.0),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: Colors.red,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Ошибка загрузки интерфейса',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Попробуйте перезапустить приложение',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   Widget _buildHeaderSection() {
     return Container(
-      padding: AppStyles.cardPadding,
+      padding: const EdgeInsets.all(20.0),
       decoration: BoxDecoration(
-        gradient: AppStyles.balanceCardGradient,
+        gradient: const LinearGradient(
+          colors: [AppTheme.primaryGreen, AppTheme.primaryLightGreen],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: AppStyles.cardShadow,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 80,
@@ -621,7 +831,11 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
           title: 'Выбрать из галереи',
           subtitle: 'Выбрать существующее фото',
           onTap: () => _captureImage(ImageSource.gallery),
-          gradient: AppStyles.successCardGradient,
+          gradient: const LinearGradient(
+            colors: [AppTheme.successGreen, AppTheme.primaryAccentGreen],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
         ),
       ],
     );
@@ -638,7 +852,13 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
       decoration: BoxDecoration(
         gradient: gradient,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: AppStyles.buttonShadow,
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primaryGreen.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
@@ -665,6 +885,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
@@ -701,13 +922,20 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
 
   Widget _buildInfoSection() {
     return Container(
-      padding: AppStyles.cardPadding,
+      padding: const EdgeInsets.all(20.0),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: AppStyles.cardShadow,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -768,13 +996,11 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
             size: 16,
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppTheme.textSecondary,
-              ),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppTheme.textSecondary,
             ),
           ),
         ],
@@ -784,7 +1010,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
 
   Widget _buildDataUrlSection() {
     return Container(
-      padding: AppStyles.cardPadding,
+      padding: const EdgeInsets.all(20.0),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(16),
@@ -794,17 +1020,18 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              const Icon(
+              Icon(
                 Icons.check_circle,
                 color: AppTheme.successGreen,
                 size: 20,
               ),
-              const SizedBox(width: 8),
-              const Text(
+              SizedBox(width: 8),
+              Text(
                 'Изображение загружено',
                 style: TextStyle(
                   fontSize: 16,
@@ -839,6 +1066,13 @@ Future<String> getImageDataUrl(String imagePath, String imageFormat) async {
       throw Exception("Could not read '$imagePath'.");
     }
 
+    // Проверяем размер файла для предотвращения зависания
+    final fileSize = await imageFile.length();
+    if (fileSize > 10 * 1024 * 1024) {
+      // 10MB лимит
+      throw Exception("Файл слишком большой. Максимальный размер: 10MB");
+    }
+
     List<int> imageBytes = await imageFile.readAsBytes();
 
     // Кодирование байтов в Base64
@@ -849,6 +1083,7 @@ Future<String> getImageDataUrl(String imagePath, String imageFormat) async {
 
     return dataUrl;
   } catch (e) {
+    AppLogger.error('Ошибка при получении Data URL: $e');
     rethrow;
   }
 }
@@ -892,149 +1127,89 @@ String? convertToIsoDate(String? dateStr) {
   }
 }
 
-Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
-  final storage = const FlutterSecureStorage();
-  final accessToken = await storage.read(key: 'access_token');
-  final prefs = await SharedPreferences.getInstance();
-  final selectedAccount = prefs.getInt('selectedAccountId');
-
-  if (accessToken == null) {
-    await logToFile('❌ [getJsonReceipt] Ошибка: Access token не найден');
-    return {'Error': '401 Unauthorized - Access token not found'};
-  }
-
-  final Map<String, dynamic> decodedToken = JwtDecoder.decode(accessToken);
-
-  final int userId;
-  if (decodedToken['user_id'] is String) {
-    userId = int.parse(decodedToken['user_id']);
-  } else {
-    userId = decodedToken['user_id'];
-  }
-
-  final dio = Dio();
-  final payload = {
-    "messages": [
-      {
-        "role": "system",
-        "content":
-            "Вы — помощник, который извлекает структурированные данные из кассовых чеков по фотографии. Ваша задача — вернуть только корректный JSON без какого-либо дополнительного текста, комментариев или форматирования вне JSON. Не добавляйте пояснений, не используйте markdown. Если какое-либо поле отсутствует на чеке, используйте null для строк, 0 для чисел или пустой массив для списков. Все суммы указывайте в рублях, без знака валюты, с точкой как разделителем. Не придумывайте данные, если их нет на чеке. Поле receipt_date возвращайте строго в формате ISO 8601 (YYYY-MM-DDTHH:MM:SS)."
-      },
-      {
-        "role": "user",
-        "content": [
-          {
-            "type": "text",
-            "text":
-                "На изображении кассовый чек. Преобразуйте его в JSON со следующими ключами:\n- name_seller: строка, имя продавца, если указано\n- retail_place_address: строка, адрес расчетов, если указан\n- retail_place: строка, место расчетов, если указано\n- total_sum: число, итоговая сумма в чеке\n- operation_type: число, 1 для 'Приход', 2 для 'Расход'\n- receipt_date: строка, дата и время в формате ISO 8601 (YYYY-MM-DDTHH:MM:SS)\n- number_receipt: число, номер ФД из чека\n- nds10: число, сумма НДС 10%, если указано, иначе 0\n- nds20: число, сумма НДС 20%, если указано, иначе 0\n- items: массив товаров, каждый товар — отдельный объект со следующими полями:\n  - product_name: строка, название товара\n  - category: строка, категория товара (определяется по названию, если возможно)\n  - price: число, цена за единицу товара\n  - quantity: число, количество товара\n  - amount: число, общая сумма за товар (цена × количество)\nНе объединяйте товары, даже если они полностью совпадают. Каждый товар на чеке — отдельный элемент массива items. Не пропускайте товары с нулевой ценой или количеством. Если данные отсутствуют, используйте null или 0."
-          },
-          {
-            "type": "text",
-            "text":
-                "Пример чека:\n1. Хлеб пшеничный 25.00 руб x 2 = 50.00\n2. Хлеб пшеничный 25.00 руб x 1 = 25.00\n3. Молоко 3% 45.00 руб x 1 = 45.00\n\nОжидаемый JSON:\n{\n  \"items\": [\n    {\"product_name\": \"Хлеб пшеничный\", \"category\": \"Хлебобулочные изделия\", \"price\": 25.00, \"quantity\": 2, \"amount\": 50.00},\n    {\"product_name\": \"Хлеб пшеничный\", \"category\": \"Хлебобулочные изделия\", \"price\": 25.00, \"quantity\": 1, \"amount\": 25.00},\n    {\"product_name\": \"Молоко 3%\", \"category\": null, \"price\": 45.00, \"quantity\": 1, \"amount\": 45.00}\n  ]\n}\nКаждая строка товара должна быть отдельным объектом в массиве items, даже если названия совпадают."
-          },
-          {
-            "type": "image_url",
-            "image_url": {"url": dataUrl, "detail": "high"}
-          }
-        ]
-      }
-    ],
-    "model": "openai/gpt-4.1",
-    "max_tokens": 2048,
-    "temperature": 0.6,
-    "top_p": 1
-  };
-
-  final githubToken = await getGithubToken();
-
-  // Проверяем наличие GitHub токена
-  if (githubToken == null || githubToken.isEmpty) {
-    await logToFile('❌ [getJsonReceipt] Ошибка: GitHub API токен не настроен');
-    return {
-      'Error':
-          'GitHub API токен не настроен. Перейдите в настройки и добавьте токен GitHub.'
-    };
-  }
-
+Future<Map<String, dynamic>> getJsonReceipt(String imagePath) async {
   try {
-    final response = await dio.post(
-      'https://models.github.ai/inference/chat/completions',
+    // Проверяем наличие access token
+    const storage = FlutterSecureStorage();
+    final accessToken = await storage.read(key: 'access_token');
+
+    if (accessToken == null) {
+      return {'Error': 'Access token не найден'};
+    }
+
+    // Проверяем настройки сервера
+    final serverSettings = ServerSettingsService();
+    final serverAddress = await serverSettings.getServerAddress();
+
+    if (serverAddress == null || serverAddress.isEmpty) {
+      return {'Error': 'Адрес сервера не настроен'};
+    }
+
+    // Проверяем GitHub API токен
+    final githubToken = await storage.read(key: 'github_token');
+
+    if (githubToken == null || githubToken.isEmpty) {
+      return {'Error': 'GitHub API токен не настроен'};
+    }
+
+    // Создаем FormData для отправки
+    final formData = FormData.fromMap({
+      'image': await MultipartFile.fromFile(imagePath),
+      'github_token': githubToken,
+    });
+
+    // Отправляем запрос к ИИ сервису
+    final response = await Dio().post(
+      '$serverAddress/api/ai/parse_receipt',
+      data: formData,
       options: Options(
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $githubToken',
+          'Authorization': 'Bearer $accessToken',
+          'Content-Type': 'multipart/form-data',
         },
       ),
-      data: payload,
     );
 
-    String rawResponse = response.data['choices'][0]['message']['content'];
-    await logToFile('🔍 [getJsonReceipt] Сырой ответ от ИИ: $rawResponse');
+    if (response.statusCode != 200) {
+      return {'Error': 'Ошибка сервера: ${response.statusCode}'};
+    }
 
-    String cleanedResponse =
+    final rawResponse = response.data.toString();
+    final cleanedResponse =
         rawResponse.replaceAll('```json', '').replaceAll('```', '').trim();
 
     final result = jsonDecode(cleanedResponse);
-    await logToFile('🔍 [getJsonReceipt] Парсированный JSON: $result');
 
-    // Автоматически преобразуем дату в ISO 8601, если нужно
+    // Проверяем обязательные поля
     if (result is Map<String, dynamic> && result.containsKey('receipt_date')) {
       result['receipt_date'] =
           convertToIsoDate(result['receipt_date']?.toString());
     }
 
+    // Валидация данных
     if (result is Map<String, dynamic>) {
-      // Проверяем наличие обязательных полей
+      // Проверяем total_sum
       if (result['total_sum'] == null) {
-        await logToFile('❌ [getJsonReceipt] Ошибка: отсутствует total_sum');
         return {'Error': 'Missing required data: total_sum'};
       }
 
+      // Проверяем items
       if (result['items'] == null || result['items'].isEmpty) {
-        await logToFile(
-            '❌ [getJsonReceipt] Ошибка: отсутствуют items или массив пуст');
         return {'Error': 'Missing required data: items'};
       }
 
+      // Проверяем receipt_date
       if (result['receipt_date'] == null) {
-        await logToFile('❌ [getJsonReceipt] Ошибка: отсутствует receipt_date');
         return {'Error': 'Missing required data: receipt_date'};
       }
 
-      // Преобразуем структуру данных для соответствия ожиданиям сервера
-
-      // Создаем объект seller
-      final seller = {
-        'user': userId,
+      // Формируем результат
+      return {
         'name_seller': result['name_seller'],
         'retail_place_address': result['retail_place_address'],
         'retail_place': result['retail_place'],
-      };
-
-      // Преобразуем items в product
-      final List<Map<String, dynamic>> products = [];
-      for (var item in result['items']) {
-        products.add({
-          'user': userId,
-          'product_name': item['product_name'],
-          'category': item['category'],
-          'price': item['price'] is String
-              ? double.parse(item['price'])
-              : item['price'],
-          'quantity': item['quantity'] is String
-              ? double.parse(item['quantity'])
-              : item['quantity'],
-          'amount': item['amount'] is String
-              ? double.parse(item['amount'])
-              : item['amount'],
-        });
-      }
-
-      // Создаем финальную структуру данных
-      final Map<String, dynamic> finalData = {
-        'user': userId,
-        'finance_account': selectedAccount ?? 0,
+        'product': result['items'],
+        'total_sum': result['total_sum'],
         'receipt_date': result['receipt_date'],
         'number_receipt': result['number_receipt'] is String
             ? int.parse(result['number_receipt'])
@@ -1048,74 +1223,11 @@ Future<Map<String, dynamic>> getJsonReceipt(dataUrl) async {
         'operation_type': result['operation_type'] is String
             ? int.parse(result['operation_type'])
             : result['operation_type'],
-        'total_sum': result['total_sum'] is String
-            ? double.parse(result['total_sum'])
-            : result['total_sum'],
-        'seller': seller,
-        'product': products,
       };
-
-      await logToFile(
-          '🔍 [getJsonReceipt] Финальная структура данных: $finalData');
-
-      return finalData;
     }
 
     return result;
   } catch (e) {
-    await logToFile('❌ [getJsonReceipt] Ошибка при обработке: $e');
-    if (e is DioException) {
-      final statusCode = e.response?.statusCode;
-      final responseData = e.response?.data;
-
-      await logToFile(
-          '🔍 [getJsonReceipt] DioException - статус: $statusCode, данные: $responseData');
-
-      // Обработка ошибок GitHub API
-      if (statusCode == 401) {
-        return {
-          'Error':
-              'GitHub API токен недействителен или просрочен. Обновите токен в настройках.'
-        };
-      } else if (statusCode == 403) {
-        return {
-          'Error':
-              'Доступ к GitHub API запрещен. Проверьте права доступа токена.'
-        };
-      } else if (statusCode == 429) {
-        return {
-          'Error': 'Превышен лимит запросов к GitHub API. Попробуйте позже.'
-        };
-      } else if (statusCode == 500 || statusCode == 502 || statusCode == 503) {
-        return {'Error': 'Ошибка сервера GitHub API. Попробуйте позже.'};
-      } else if (e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.receiveTimeout ||
-          e.type == DioExceptionType.sendTimeout) {
-        return {
-          'Error':
-              'Таймаут подключения к GitHub API. Проверьте интернет-соединение.'
-        };
-      } else if (e.type == DioExceptionType.connectionError) {
-        return {
-          'Error':
-              'Ошибка подключения к GitHub API. Проверьте интернет-соединение.'
-        };
-      }
-
-      // Если есть данные ответа, пытаемся извлечь сообщение об ошибке
-      if (responseData != null) {
-        if (responseData is Map) {
-          final errorMessage = responseData['error']?['message'] ??
-              responseData['message'] ??
-              responseData.toString();
-          return {'Error': 'Ошибка GitHub API: $errorMessage'};
-        } else {
-          return {'Error': 'Ошибка GitHub API: ${responseData.toString()}'};
-        }
-      }
-
-      return {'Error': 'Ошибка GitHub API: ${e.message ?? e.toString()}'};
-    }
-    return {'Error': 'Неожиданная ошибка: ${e.toString()}'};
+    return {'Error': 'Ошибка при обработке: $e'};
   }
 }

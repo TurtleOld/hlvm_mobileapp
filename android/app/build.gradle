@@ -62,35 +62,20 @@ android {
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig signingConfigs.debug
             
-            // Security configurations for release build
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            
-            // Additional security flags
-            ndk {
-                debugSymbolLevel 'NONE'
-            }
-            
-            // Disable debugging in release
-            debuggable false
-            jniDebuggable false
-            renderscriptDebuggable false
-            pseudoLocalesEnabled false
-            zipAlignEnabled true
+            // Basic build settings
+            minifyEnabled false
+            shrinkResources false
         }
         
         debug {
-            // Debug build security
+            // Debug build settings
             debuggable true
             jniDebuggable true
             renderscriptDebuggable true
-            pseudoLocalesEnabled false
-            zipAlignEnabled false
         }
     }
     
-    // Additional security configurations
+    // Basic packaging options
     packagingOptions {
         // Exclude unnecessary files
         exclude 'META-INF/DEPENDENCIES'
@@ -102,14 +87,6 @@ android {
         exclude 'META-INF/notice.txt'
         exclude 'META-INF/ASL2.0'
         exclude 'META-INF/*.kotlin_module'
-        
-        // Exclude debug symbols
-        exclude '**/lib/*/libc++_shared.so'
-        exclude '**/lib/*/libjsc.so'
-        exclude '**/lib/*/libjsc.so.*'
-        exclude '**/*.dSYM'
-        exclude '**/*.so.dbg'
-        exclude '**/*.so.debug'
     }
     
 
@@ -120,7 +97,5 @@ flutter {
 }
 
 dependencies {
-    // Security dependencies
-    implementation 'androidx.security:security-crypto:1.1.0-alpha06'
-    implementation 'androidx.security:security-crypto-ktx:1.1.0-alpha06'
+    // Basic dependencies
 }

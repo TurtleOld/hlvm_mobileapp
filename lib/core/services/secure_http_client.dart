@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hlvm_mobileapp/core/services/session_manager.dart';
@@ -37,12 +36,29 @@ class SecureHttpClient {
         _serverSettings = serverSettings ?? ServerSettingsService(),
         _logger = logger ?? Talker();
 
-  /// Проверяет, настроен ли сервер
+  /// Проверка, настроен ли сервер
   Future<bool> isServerConfigured() async {
     try {
-      return await _serverSettings.isServerConfigured();
+      final serverAddress = await _serverSettings.getServerAddress();
+
+      // Проверяем, что адрес не пустой и корректный
+      if (serverAddress == null || serverAddress.isEmpty) {
+        return false;
+      }
+
+      // Дополнительная проверка на корректность адреса
+      if (serverAddress.length > 100 ||
+          serverAddress.contains(' ') ||
+          serverAddress.contains('\n') ||
+          serverAddress.contains('\r') ||
+          serverAddress.contains('0DhwISORbzhVjurLYbxio6Xd')) {
+        _logger.warning('Invalid server address format: $serverAddress');
+        return false;
+      }
+
+      return true;
     } catch (e) {
-      _logger.error('Ошибка проверки настроек сервера: $e');
+      _logger.error('Ошибка проверки конфигурации сервера: $e');
       return false;
     }
   }
@@ -53,7 +69,17 @@ class SecureHttpClient {
       if (_baseUrl != null) {
         return _baseUrl;
       }
-      return await _serverSettings.getFullServerUrl();
+
+      final url = await _serverSettings.getFullServerUrl();
+
+      // Проверяем корректность полученного URL
+      if (url != null &&
+          (url.length > 200 || url.contains(' ') || url.contains('\n'))) {
+        _logger.warning('Invalid server URL format: $url');
+        return null;
+      }
+
+      return url;
     } catch (e) {
       _logger.error('Ошибка получения URL сервера: $e');
       return null;
@@ -76,6 +102,36 @@ class SecureHttpClient {
     } catch (e) {
       _logger.warning('Сервер недоступен: $e');
       return false;
+    }
+  }
+
+  /// Сбрасывает некорректные настройки сервера
+  Future<void> resetInvalidServerSettings() async {
+    try {
+      await _serverSettings.clearInvalidSettings();
+      _logger.info('Invalid server settings reset');
+    } catch (e) {
+      _logger.error('Failed to reset invalid server settings: $e');
+    }
+  }
+
+  /// Получает сообщение о состоянии настроек сервера
+  Future<String> getConfigurationStatusMessage() async {
+    try {
+      final isConfigured = await isServerConfigured();
+      if (!isConfigured) {
+        return 'Сервер не настроен';
+      }
+
+      final baseUrl = await getServerBaseUrl();
+      if (baseUrl == null) {
+        return 'Ошибка получения адреса сервера';
+      }
+
+      return 'Сервер настроен: $baseUrl';
+    } catch (e) {
+      _logger.error('Error getting configuration status: $e');
+      return 'Ошибка проверки настроек сервера';
     }
   }
 
@@ -162,10 +218,7 @@ class SecureHttpClient {
   }) async {
     int retryCount = 0;
 
-    // Проверяем настройку сервера перед выполнением запросов
-    if (!await isServerConfigured()) {
-      throw Exception(AppConstants.serverAddressRequired);
-    }
+    // Проверка настройки сервера теперь выполняется в _buildUrl
 
     while (retryCount < _maxRetries) {
       try {
@@ -190,6 +243,11 @@ class SecureHttpClient {
 
         final secureHeaders = await _prepareSecureHeaders(headers);
         final url = await _buildUrl(endpoint, queryParameters);
+
+        if (url == null) {
+          throw Exception(AppConstants.serverAddressRequired);
+        }
+
         final response = await _performHttpRequest(
           method,
           url,
@@ -205,29 +263,51 @@ class SecureHttpClient {
         retryCount++;
 
         // Если это ошибка о не настроенном сервере, не повторяем попытки
-        if (e.toString().contains(AppConstants.serverAddressRequired)) {
+        if (e.toString().contains(AppConstants.serverAddressRequired) ||
+            e.toString().contains('Некорректный адрес сервера') ||
+            e.toString().contains('Необходимо указать адрес сервера')) {
           rethrow;
         }
 
         if (e is SessionExpiredException ||
             e is SuspiciousActivityException ||
-            e is InvalidSessionException) {
+            e is InvalidSessionException ||
+            e.toString().contains(AppConstants.serverAddressRequired) ||
+            e.toString().contains('Некорректный адрес сервера') ||
+            e.toString().contains('Необходимо указать адрес сервера')) {
           rethrow;
         }
 
         if (retryCount >= _maxRetries) {
           _logger
               .error('Превышено количество попыток для $method $endpoint: $e');
+
+          // Возвращаем более информативное сообщение об ошибке
+          if (e.toString().contains(AppConstants.serverAddressRequired) ||
+              e.toString().contains('Некорректный адрес сервера') ||
+              e.toString().contains('Необходимо указать адрес сервера')) {
+            throw Exception('Необходимо указать адрес сервера в настройках');
+          }
+
           rethrow;
         }
 
         _logger.warning(
             'Попытка $retryCount для $method $endpoint не удалась: $e');
-        await Future.delayed(_retryDelay * retryCount);
+
+        // Если это ошибка настройки сервера, не ждем перед следующей попыткой
+        if (e.toString().contains(AppConstants.serverAddressRequired) ||
+            e.toString().contains('Некорректный адрес сервера') ||
+            e.toString().contains('Необходимо указать адрес сервера')) {
+          // Не ждем, сразу переходим к следующей попытке
+        } else {
+          await Future.delayed(_retryDelay * retryCount);
+        }
       }
     }
 
-    throw Exception('Не удалось выполнить запрос после $_maxRetries попыток');
+    throw Exception(
+        'Не удалось выполнить запрос после $_maxRetries попыток. Проверьте настройки сервера.');
   }
 
   Future<Map<String, String>> _prepareSecureHeaders(
@@ -258,11 +338,19 @@ class SecureHttpClient {
     return secureHeaders;
   }
 
-  Future<Uri> _buildUrl(
+  Future<Uri?> _buildUrl(
       String endpoint, Map<String, dynamic>? queryParameters) async {
     final serverUrl = await getServerBaseUrl();
     if (serverUrl == null) {
-      throw Exception(AppConstants.serverAddressRequired);
+      return null; // Возвращаем null вместо исключения
+    }
+
+    // Дополнительная проверка на корректность URL
+    if (serverUrl.length > 200 ||
+        serverUrl.contains(' ') ||
+        serverUrl.contains('\n')) {
+      _logger.warning('Invalid server URL detected');
+      return null; // Возвращаем null вместо исключения
     }
 
     final uri = Uri.parse('$serverUrl$endpoint');
@@ -322,7 +410,7 @@ class SecureHttpClient {
       await _handleServerErrorResponse(response);
     }
 
-    await _validateSecurityHeaders(response);
+    await _validateResponse(response);
     await _updateTokensFromResponse(response);
   }
 
@@ -386,26 +474,16 @@ class SecureHttpClient {
     }
   }
 
-  Future<void> _validateSecurityHeaders(http.Response response) async {
+  /// Валидация ответа сервера
+  Future<void> _validateResponse(http.Response response) async {
     try {
-      final securityHeaders = response.headers;
-
-      final frameOptions = securityHeaders['x-frame-options'];
-      if (frameOptions == null) {
-        _logger.warning('Отсутствует заголовок X-Frame-Options');
-      }
-
-      final contentTypeOptions = securityHeaders['x-content-type-options'];
-      if (contentTypeOptions == null) {
-        _logger.warning('Отсутствует заголовок X-Content-Type-Options');
-      }
-
-      final hsts = securityHeaders['strict-transport-security'];
-      if (hsts == null) {
-        _logger.warning('Отсутствует заголовок Strict-Transport-Security');
+      // Базовая валидация ответа
+      if (response.statusCode >= 400) {
+        throw Exception('HTTP Error: ${response.statusCode}');
       }
     } catch (e) {
-      _logger.error('Ошибка валидации заголовков безопасности: $e');
+      _logger.error('Ошибка валидации ответа: $e');
+      rethrow;
     }
   }
 
@@ -487,20 +565,21 @@ class SecureHttpClient {
     }
   }
 
+  /// Проверка соединения с сервером
   Future<bool> checkConnection() async {
     try {
-      final serverUrl = await getServerBaseUrl();
-      if (serverUrl == null) {
+      final serverAddress = await _serverSettings.getServerAddress();
+      if (serverAddress == null || serverAddress.isEmpty) {
         return false;
       }
 
       final response = await _httpClient
-          .get(Uri.parse('$serverUrl/health'))
+          .get(Uri.parse('$serverAddress/api/health'))
           .timeout(const Duration(seconds: 5));
 
       return response.statusCode == 200;
     } catch (e) {
-      _logger.warning('Проверка соединения не удалась: $e');
+      _logger.error('Ошибка проверки соединения: $e');
       return false;
     }
   }
@@ -517,7 +596,7 @@ class SecureHttpClient {
       return {
         'hasValidSession': sessionInfo != null,
         'sessionId': sessionInfo?.sessionId,
-        'sessionExpiresAt': sessionInfo?.expiresAt?.toIso8601String(),
+        'sessionExpiresAt': sessionInfo?.expiresAt.toIso8601String(),
         'hasAccessToken': hasAccessToken,
         'hasRefreshToken': hasRefreshToken,
         'connectionStatus': connectionStatus,

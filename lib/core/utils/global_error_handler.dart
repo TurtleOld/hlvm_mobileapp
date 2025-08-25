@@ -90,8 +90,8 @@ class GlobalErrorHandler {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(AppConstants.sessionExpiredTitle),
-          content: Text(AppConstants.sessionExpired),
+          title: const Text(AppConstants.sessionExpiredTitle),
+          content: const Text(AppConstants.sessionExpired),
           actions: [
             TextButton(
               onPressed: () {
@@ -102,7 +102,7 @@ class GlobalErrorHandler {
                   (route) => false,
                 );
               },
-              child: Text(AppConstants.sessionExpiredAction),
+              child: const Text(AppConstants.sessionExpiredAction),
             ),
           ],
         );

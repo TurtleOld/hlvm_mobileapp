@@ -40,7 +40,7 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
       final cachedReceipts = await _cacheService.getCachedReceipts();
       if (cachedReceipts != null) {
         emit(ReceiptsLoaded(receipts: cachedReceipts));
-        _talkerBloc.add(ShowSuccessEvent(message: 'Данные загружены из кеша'));
+        _talkerBloc.add(const ShowSuccessEvent(message: 'Данные загружены из кеша'));
       }
 
       // Затем загружаем свежие данные с сервера
@@ -147,8 +147,8 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
       // TODO: Добавить обработку изображения
       // Пока просто эмулируем успешную загрузку
       _talkerBloc
-          .add(ShowSuccessEvent(message: 'Изображение успешно обработано'));
-      emit(ReceiptUploadSuccess(message: 'Изображение успешно обработано'));
+          .add(const ShowSuccessEvent(message: 'Изображение успешно обработано'));
+      emit(const ReceiptUploadSuccess(message: 'Изображение успешно обработано'));
     } catch (e) {
       final errorMessage = GlobalErrorHandler.handleBlocError(e);
 
@@ -180,7 +180,7 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
           await _cacheService.getCachedSellerInfo(event.sellerId);
       if (cachedSellerInfo != null) {
         emit(SellerInfoLoaded(sellerInfo: cachedSellerInfo));
-        _talkerBloc.add(ShowSuccessEvent(
+        _talkerBloc.add(const ShowSuccessEvent(
             message: 'Информация о продавце загружена из кеша'));
       }
 

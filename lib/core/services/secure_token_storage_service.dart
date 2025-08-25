@@ -1,10 +1,9 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:hlvm_mobileapp/core/services/bruteforce_protection_service.dart';
 
 /// Сервис для безопасного хранения токенов аутентификации
-/// Использует Flutter Secure Storage и дополнительное шифрование
+/// Использует Flutter Secure Storage
 class SecureTokenStorageService {
   static const String _accessTokenKey = 'access_token';
   static const String _refreshTokenKey = 'refresh_token';
@@ -13,24 +12,17 @@ class SecureTokenStorageService {
   static const String _sessionIdKey = 'session_id';
 
   final FlutterSecureStorage _secureStorage;
-  final BruteforceProtectionService _bruteforceProtection;
 
   SecureTokenStorageService({
     FlutterSecureStorage? secureStorage,
-    BruteforceProtectionService? bruteforceProtection,
-  })  : _secureStorage = secureStorage ?? const FlutterSecureStorage(),
-        _bruteforceProtection =
-            bruteforceProtection ?? BruteforceProtectionService();
+  }) : _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
-  /// Сохраняет токен доступа с шифрованием
+  /// Сохраняет токен доступа
   Future<void> storeAccessToken(String token, {Duration? expiry}) async {
     try {
-      // Шифруем токен перед сохранением
-      final encryptedToken = await _bruteforceProtection.encryptData(token);
-
       await _secureStorage.write(
         key: _accessTokenKey,
-        value: encryptedToken,
+        value: token,
       );
 
       // Сохраняем время истечения токена
@@ -49,11 +41,11 @@ class SecureTokenStorageService {
     }
   }
 
-  /// Получает токен доступа с расшифровкой
+  /// Получает токен доступа
   Future<String?> getAccessToken() async {
     try {
-      final encryptedToken = await _secureStorage.read(key: _accessTokenKey);
-      if (encryptedToken == null) return null;
+      final token = await _secureStorage.read(key: _accessTokenKey);
+      if (token == null) return null;
 
       // Проверяем, не истек ли токен
       if (await _isTokenExpired()) {
@@ -61,10 +53,9 @@ class SecureTokenStorageService {
         return null;
       }
 
-      // Расшифровываем токен
-      return await _bruteforceProtection.decryptData(encryptedToken);
+      return token;
     } catch (e) {
-      // При ошибке расшифровки очищаем токены
+      // При ошибке очищаем токены
       await clearTokens();
       return null;
     }
@@ -73,10 +64,9 @@ class SecureTokenStorageService {
   /// Сохраняет refresh токен
   Future<void> storeRefreshToken(String token) async {
     try {
-      final encryptedToken = await _bruteforceProtection.encryptData(token);
       await _secureStorage.write(
         key: _refreshTokenKey,
-        value: encryptedToken,
+        value: token,
       );
     } catch (e) {
       throw Exception('Не удалось сохранить refresh токен: $e');
@@ -86,10 +76,10 @@ class SecureTokenStorageService {
   /// Получает refresh токен
   Future<String?> getRefreshToken() async {
     try {
-      final encryptedToken = await _secureStorage.read(key: _refreshTokenKey);
-      if (encryptedToken == null) return null;
+      final token = await _secureStorage.read(key: _refreshTokenKey);
+      if (token == null) return null;
 
-      return await _bruteforceProtection.decryptData(encryptedToken);
+      return token;
     } catch (e) {
       return null;
     }
@@ -99,11 +89,9 @@ class SecureTokenStorageService {
   Future<void> storeUserData(Map<String, dynamic> userData) async {
     try {
       final jsonData = jsonEncode(userData);
-      final encryptedData = await _bruteforceProtection.encryptData(jsonData);
-
       await _secureStorage.write(
         key: _userDataKey,
-        value: encryptedData,
+        value: jsonData,
       );
     } catch (e) {
       throw Exception('Не удалось сохранить данные пользователя: $e');
@@ -113,10 +101,9 @@ class SecureTokenStorageService {
   /// Получает данные пользователя
   Future<Map<String, dynamic>?> getUserData() async {
     try {
-      final encryptedData = await _secureStorage.read(key: _userDataKey);
-      if (encryptedData == null) return null;
+      final jsonData = await _secureStorage.read(key: _userDataKey);
+      if (jsonData == null) return null;
 
-      final jsonData = await _bruteforceProtection.decryptData(encryptedData);
       return jsonDecode(jsonData) as Map<String, dynamic>;
     } catch (e) {
       return null;
@@ -232,8 +219,6 @@ class SecureTokenStorageService {
   Future<bool> validateStoredData() async {
     try {
       final accessToken = await getAccessToken();
-      final refreshToken = await getRefreshToken();
-      final userData = await getUserData();
       final sessionId = await getSessionId();
 
       // Проверяем, что хотя бы основные данные доступны

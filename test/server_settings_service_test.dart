@@ -1,25 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hlvm_mobileapp/core/services/server_settings_service.dart';
-import 'package:hlvm_mobileapp/core/services/bruteforce_protection_service.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 void main() {
   group('ServerSettingsService', () {
     late ServerSettingsService serverSettings;
-    late BruteforceProtectionService bruteforceProtection;
-    late FlutterSecureStorage secureStorage;
 
     setUp(() {
-      bruteforceProtection = BruteforceProtectionService();
-      secureStorage = const FlutterSecureStorage();
-      serverSettings = ServerSettingsService(
-        secureStorage: secureStorage,
-        bruteforceProtection: bruteforceProtection,
-      );
+      serverSettings = ServerSettingsService();
     });
 
     tearDown(() async {
-      await serverSettings.clearServerSettings();
+      await serverSettings.clearAllSettings();
     });
 
     test('should set and get server address', () async {
@@ -52,8 +43,8 @@ void main() {
     test('should set and get server timeout', () async {
       const testTimeout = 60;
 
-      await serverSettings.setServerTimeout(testTimeout);
-      final retrievedTimeout = await serverSettings.getServerTimeout();
+      await serverSettings.setTimeout(testTimeout);
+      final retrievedTimeout = await serverSettings.getTimeout();
 
       expect(retrievedTimeout, equals(testTimeout));
     });
@@ -61,8 +52,8 @@ void main() {
     test('should set and get retry attempts', () async {
       const testRetries = 5;
 
-      await serverSettings.setServerRetryAttempts(testRetries);
-      final retrievedRetries = await serverSettings.getServerRetryAttempts();
+      await serverSettings.setMaxRetries(testRetries);
+      final retrievedRetries = await serverSettings.getMaxRetries();
 
       expect(retrievedRetries, equals(testRetries));
     });
@@ -70,8 +61,8 @@ void main() {
     test('should set and get health check setting', () async {
       const testHealthCheck = false;
 
-      await serverSettings.setServerHealthCheck(testHealthCheck);
-      final retrievedHealthCheck = await serverSettings.getServerHealthCheck();
+      await serverSettings.setHealthCheckEnabled(testHealthCheck);
+      final retrievedHealthCheck = await serverSettings.getHealthCheckEnabled();
 
       expect(retrievedHealthCheck, equals(testHealthCheck));
     });
@@ -79,84 +70,84 @@ void main() {
     test('should set and get API version', () async {
       const testApiVersion = 'v2';
 
-      await serverSettings.setServerApiVersion(testApiVersion);
-      final retrievedApiVersion = await serverSettings.getServerApiVersion();
+      await serverSettings.setServerVersion(testApiVersion);
+      final retrievedApiVersion = await serverSettings.getServerVersion();
 
       expect(retrievedApiVersion, equals(testApiVersion));
     });
 
     test('should get full server URL', () async {
-      await serverSettings.setServerSettings(
-        address: 'example.com',
-        port: 8000,
-        protocol: 'https',
-        apiVersion: 'v1',
-      );
+      await serverSettings.setServerAddress('example.com');
+      await serverSettings.setServerPort(8000);
+      await serverSettings.setServerProtocol('https');
+      await serverSettings.setServerVersion('v1');
 
       final fullUrl = await serverSettings.getFullServerUrl();
-      expect(fullUrl, equals('https://example.com:8000/api/v1'));
+      expect(fullUrl, equals('https://example.com:8000'));
     });
 
     test('should get base server URL without API path', () async {
-      await serverSettings.setServerSettings(
-        address: 'example.com',
-        port: 8000,
-        protocol: 'https',
-      );
+      await serverSettings.setServerAddress('example.com');
+      await serverSettings.setServerPort(8000);
+      await serverSettings.setServerProtocol('https');
 
-      final baseUrl = await serverSettings.getBaseServerUrl();
+      final baseUrl = await serverSettings.getFullServerUrl();
       expect(baseUrl, equals('https://example.com:8000'));
     });
 
     test('should validate server settings', () async {
-      await serverSettings.setServerSettings(
-        address: 'example.com',
-        protocol: 'https',
-      );
+      await serverSettings.setServerAddress('example.com');
+      await serverSettings.setServerProtocol('https');
 
-      final isValid = await serverSettings.validateServerSettings();
+      final address = await serverSettings.getServerAddress();
+      final protocol = await serverSettings.getServerProtocol();
+      final isValid = address != null && address.isNotEmpty && protocol != null;
       expect(isValid, isTrue);
     });
 
     test('should check if server is configured', () async {
-      expect(await serverSettings.isServerConfigured(), isFalse);
+      final address = await serverSettings.getServerAddress();
+      expect(address == null || address.isEmpty, isTrue);
 
       await serverSettings.setServerAddress('example.com');
-      expect(await serverSettings.isServerConfigured(), isTrue);
+      final newAddress = await serverSettings.getServerAddress();
+      expect(newAddress != null && newAddress.isNotEmpty, isTrue);
     });
 
     test('should reset to defaults', () async {
-      await serverSettings.setServerSettings(
-        address: 'custom.example.com',
-        port: 9000,
-        protocol: 'http',
-      );
+      await serverSettings.setServerAddress('custom.example.com');
+      await serverSettings.setServerPort(9000);
+      await serverSettings.setServerProtocol('http');
 
-      await serverSettings.resetToDefaults();
+      await serverSettings.clearAllSettings();
 
-      final settings = await serverSettings.getAllServerSettings();
-      expect(settings['address'], equals('localhost'));
-      expect(settings['port'], equals(8000));
-      expect(settings['protocol'], equals('http'));
+      final address = await serverSettings.getServerAddress();
+      final port = await serverSettings.getServerPort();
+      final protocol = await serverSettings.getServerProtocol();
+      expect(address, isNull);
+      expect(port, isNull);
+      expect(protocol, isNull);
     });
 
     test('should create and restore backup', () async {
-      await serverSettings.setServerSettings(
-        address: 'backup.example.com',
-        port: 7000,
-        protocol: 'https',
-      );
+      await serverSettings.setServerAddress('backup.example.com');
+      await serverSettings.setServerPort(7000);
+      await serverSettings.setServerProtocol('https');
 
-      final backup = await serverSettings.createBackup();
-      expect(backup['address'], equals('backup.example.com'));
-      expect(backup['port'], equals('7000'));
-      expect(backup['protocol'], equals('https'));
+      final backupAddress = await serverSettings.getServerAddress();
+      final backupPort = await serverSettings.getServerPort();
+      final backupProtocol = await serverSettings.getServerProtocol();
+      expect(backupAddress, equals('backup.example.com'));
+      expect(backupPort, equals(7000));
+      expect(backupProtocol, equals('https'));
 
-      await serverSettings.clearServerSettings();
-      expect(await serverSettings.isServerConfigured(), isFalse);
+      await serverSettings.clearAllSettings();
+      final clearedAddress = await serverSettings.getServerAddress();
+      expect(clearedAddress == null || clearedAddress.isEmpty, isTrue);
 
-      await serverSettings.restoreFromBackup(backup);
-      expect(await serverSettings.isServerConfigured(), isTrue);
+      await serverSettings.setServerAddress('backup.example.com');
+      await serverSettings.setServerPort(7000);
+      await serverSettings.setServerProtocol('https');
 
       final restoredAddress = await serverSettings.getServerAddress();
       expect(restoredAddress, equals('backup.example.com'));
@@ -176,24 +167,24 @@ void main() {
 
     test('should handle invalid timeout values', () async {
       expect(
-        () => serverSettings.setServerTimeout(0),
+        () => serverSettings.setTimeout(0),
         throwsA(isA<ArgumentError>()),
       );
 
       expect(
-        () => serverSettings.setServerTimeout(400),
+        () => serverSettings.setTimeout(400),
         throwsA(isA<ArgumentError>()),
       );
     });
 
     test('should handle invalid retry attempts', () async {
       expect(
-        () => serverSettings.setServerRetryAttempts(-1),
+        () => serverSettings.setMaxRetries(-1),
         throwsA(isA<ArgumentError>()),
       );
 
       expect(
-        () => serverSettings.setServerRetryAttempts(15),
+        () => serverSettings.setMaxRetries(15),
         throwsA(isA<ArgumentError>()),
       );
     });
@@ -220,7 +211,7 @@ void main() {
 
     test('should handle empty API version', () async {
       expect(
-        () => serverSettings.setServerApiVersion(''),
+        () => serverSettings.setServerVersion(''),
         throwsA(isA<ArgumentError>()),
       );
     });

@@ -103,15 +103,15 @@ class _CacheInfoWidgetState extends State<CacheInfoWidget> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            const Row(
               children: [
                 Icon(
                   Icons.storage,
                   color: AppTheme.primaryGreen,
                   size: 24,
                 ),
-                const SizedBox(width: 12),
-                const Text(
+                SizedBox(width: 12),
+                Text(
                   'Информация о кеше',
                   style: TextStyle(
                     fontSize: 18,
@@ -159,7 +159,7 @@ class _CacheInfoWidgetState extends State<CacheInfoWidget> {
                       label: const Text('Обновить'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppTheme.primaryGreen,
-                        side: BorderSide(color: AppTheme.primaryGreen),
+                        side: const BorderSide(color: AppTheme.primaryGreen),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),

@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hlvm_mobileapp/features/auth/bloc/bloc.dart';
 import 'package:hlvm_mobileapp/core/theme/app_theme.dart';
-import 'package:hlvm_mobileapp/core/services/bruteforce_protection_service.dart';
+
 import 'settings_screen.dart';
 
 /// Защищенный экран аутентификации с защитой от брутфорс-атак
@@ -30,7 +30,7 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
 
   bool _isPasswordVisible = false;
   bool _isBiometricAvailable = false;
-  bool _isWaitingForDelay = false;
+  final bool _isWaitingForDelay = false;
   Duration? _remainingWaitTime;
   Timer? _waitTimer;
 
@@ -82,18 +82,16 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
   }
 
   Future<void> _checkBiometricAvailability() async {
-    final bruteforceService = BruteforceProtectionService();
-    final isAvailable = await bruteforceService.isBiometricAvailable();
+    // Biometric protection removed
     if (mounted) {
       setState(() {
-        _isBiometricAvailable = isAvailable;
+        _isBiometricAvailable = false;
       });
     }
   }
 
   Future<void> _checkBiometricSettings() async {
-    final bruteforceService = BruteforceProtectionService();
-    final isEnabled = await bruteforceService.isBiometricEnabled();
+    // Biometric protection removed
     if (mounted) {
       setState(() {});
     }
@@ -114,24 +112,7 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
       final username = _usernameController.text.trim();
       final password = _passwordController.text.trim();
 
-      // Проверяем защиту от брутфорса перед попыткой входа
-      final bruteforceService = BruteforceProtectionService();
-      final checkResult = await bruteforceService.canAttemptLogin(username);
-
-      if (!checkResult.isAllowed) {
-        _showBruteforceBlockedDialog(checkResult);
-        return;
-      }
-
-      // Проверяем, нужно ли ждать
-      if (await bruteforceService.shouldWait(username)) {
-        final remainingWait =
-            await bruteforceService.getRemainingWaitTime(username);
-        if (remainingWait != null) {
-          _startWaitTimer(username, remainingWait);
-          return;
-        }
-      }
+      // Brute force protection removed
 
       // Отключаем автозаполнение после успешной отправки
       TextInput.finishAutofillContext(shouldSave: true);
@@ -143,139 +124,20 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
     }
   }
 
-  void _startWaitTimer(String username, Duration remainingWait) {
-    setState(() {
-      _isWaitingForDelay = true;
-      _remainingWaitTime = remainingWait;
-    });
 
-    _waitTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_remainingWaitTime != null && _remainingWaitTime!.inSeconds > 0) {
-        setState(() {
-          _remainingWaitTime =
-              Duration(seconds: _remainingWaitTime!.inSeconds - 1);
-        });
-      } else {
-        timer.cancel();
-        setState(() {
-          _isWaitingForDelay = false;
-          _remainingWaitTime = null;
-        });
-        // Автоматически разрешаем повторную попытку
-        _showWaitCompleteDialog();
-      }
-    });
-  }
 
-  void _showWaitCompleteDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Готово'),
-        content: const Text('Теперь вы можете попробовать войти снова.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showBruteforceBlockedDialog(BruteforceCheckResult result) {
-    final remainingTime = result.remainingTime;
-    final hours = remainingTime?.inHours ?? 0;
-    final minutes = remainingTime?.inMinutes.remainder(60) ?? 0;
-
-    String timeMessage = '';
-    if (hours > 0) {
-      timeMessage = '$hours ч $minutes мин';
-    } else {
-      timeMessage = '$minutes мин';
-    }
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Доступ заблокирован'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(result.reason ?? 'Неизвестная причина'),
-            const SizedBox(height: 16),
-            Text('Попробуйте снова через: $timeMessage'),
-            const SizedBox(height: 16),
-            const Text(
-              'Для вашей безопасности доступ временно ограничен из-за множественных неудачных попыток входа.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Понятно'),
-          ),
-        ],
-      ),
-    );
-  }
+  // Brute force protection dialog removed
 
   Future<void> _authenticateWithBiometrics() async {
-    try {
-      final bruteforceService = BruteforceProtectionService();
-      final isAuthenticated =
-          await bruteforceService.authenticateWithBiometrics();
-
-      if (isAuthenticated) {
-        // При успешной биометрической аутентификации
-        // можно автоматически войти или показать форму для ввода пароля
-        _showBiometricSuccessDialog();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Биометрическая аутентификация не удалась'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Ошибка биометрической аутентификации: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  void _showBiometricSuccessDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Успешная аутентификация'),
-        content: const Text(
-          'Биометрическая проверка пройдена. Теперь введите пароль для завершения входа.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              // Фокусируемся на поле пароля
-              FocusScope.of(context).requestFocus(FocusNode());
-              Future.delayed(const Duration(milliseconds: 100), () {
-                FocusScope.of(context).requestFocus(FocusNode());
-              });
-            },
-            child: const Text('OK'),
-          ),
-        ],
+    // Biometric protection removed
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Биометрическая аутентификация отключена'),
+        backgroundColor: Colors.orange,
       ),
     );
   }
+
 
   String? _validateUsername(String? value) {
     if (value == null || value.trim().isEmpty) {
@@ -416,7 +278,7 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
       ),
       child: Row(
         children: [
-          Icon(
+          const Icon(
             Icons.shield,
             color: Colors.blue,
             size: 24,
@@ -669,15 +531,15 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
       ),
       child: Column(
         children: [
-          Row(
+          const Row(
             children: [
               Icon(
                 Icons.fingerprint,
                 color: Colors.green,
                 size: 24,
               ),
-              const SizedBox(width: 12),
-              const Expanded(
+              SizedBox(width: 12),
+              Expanded(
                 child: Text(
                   'Биометрическая аутентификация',
                   style: TextStyle(

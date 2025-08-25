@@ -44,6 +44,18 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     super.dispose();
   }
 
+  Future<Map<String, dynamic>> _getCurrentSettings() async {
+    return {
+      'address': await _serverSettings.getServerAddress(),
+      'port': await _serverSettings.getServerPort(),
+      'timeout': await _serverSettings.getTimeout(),
+      'retryAttempts': await _serverSettings.getMaxRetries(),
+      'protocol': await _serverSettings.getServerProtocol(),
+      'healthCheck': await _serverSettings.getHealthCheckEnabled(),
+      'apiVersion': await _serverSettings.getServerVersion(),
+    };
+  }
+
   Future<void> _loadCurrentSettings() async {
     setState(() {
       _isLoading = true;
@@ -51,14 +63,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     });
 
     try {
-      final settings = await _serverSettings.getAllServerSettings();
-
-      if (settings.containsKey('error')) {
-        setState(() {
-          _errorMessage = 'Ошибка загрузки настроек: ${settings['error']}';
-        });
-        return;
-      }
+      final settings = await _getCurrentSettings();
 
       setState(() {
         _addressController.text = settings['address'] ?? '';
@@ -99,15 +104,13 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
         throw Exception('Некорректные значения полей');
       }
 
-      await _serverSettings.setServerSettings(
-        address: _addressController.text.trim(),
-        port: port,
-        protocol: _selectedProtocol,
-        timeout: timeout,
-        retryAttempts: retryAttempts,
-        healthCheck: _healthCheckEnabled,
-        apiVersion: _selectedApiVersion,
-      );
+      await _serverSettings.setServerAddress(_addressController.text.trim());
+      await _serverSettings.setServerPort(port);
+      await _serverSettings.setServerProtocol(_selectedProtocol);
+      await _serverSettings.setTimeout(timeout);
+      await _serverSettings.setMaxRetries(retryAttempts);
+      await _serverSettings.setHealthCheckEnabled(_healthCheckEnabled);
+      await _serverSettings.setServerVersion(_selectedApiVersion);
 
       setState(() {
         _successMessage = 'Настройки сервера успешно сохранены';
@@ -159,7 +162,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       });
 
       try {
-        await _serverSettings.resetToDefaults();
+        await _serverSettings.clearAllSettings();
         await _loadCurrentSettings();
 
         if (mounted) {
@@ -188,13 +191,13 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
     });
 
     try {
-      final isConfigured = await _serverSettings.isServerConfigured();
-      if (!isConfigured) {
+      final address = await _serverSettings.getServerAddress();
+      if (address == null || address.isEmpty) {
         throw Exception('Сервер не настроен');
       }
 
-      final isValid = await _serverSettings.validateServerSettings();
-      if (!isValid) {
+      final port = await _serverSettings.getServerPort();
+      if (port == null || port < 1 || port > 65535) {
         throw Exception('Настройки сервера некорректны');
       }
 
@@ -314,8 +317,9 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                                     ),
                                     keyboardType: TextInputType.number,
                                     validator: (value) {
-                                      if (value == null || value.isEmpty)
+                                      if (value == null || value.isEmpty) {
                                         return null;
+                                      }
                                       final port = int.tryParse(value);
                                       if (port == null ||
                                           port < 1 ||
@@ -381,8 +385,9 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                                     ),
                                     keyboardType: TextInputType.number,
                                     validator: (value) {
-                                      if (value == null || value.isEmpty)
+                                      if (value == null || value.isEmpty) {
                                         return null;
+                                      }
                                       final timeout = int.tryParse(value);
                                       if (timeout == null ||
                                           timeout < 1 ||
@@ -405,8 +410,9 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                                     ),
                                     keyboardType: TextInputType.number,
                                     validator: (value) {
-                                      if (value == null || value.isEmpty)
+                                      if (value == null || value.isEmpty) {
                                         return null;
+                                      }
                                       final attempts = int.tryParse(value);
                                       if (attempts == null ||
                                           attempts < 0 ||

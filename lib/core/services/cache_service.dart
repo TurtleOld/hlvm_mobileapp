@@ -172,7 +172,7 @@ class CacheService {
   Future<void> _cleanupOldCache() async {
     try {
       final currentSize = await getCacheSize();
-      final maxSizeBytes = _maxCacheSizeMB * 1024 * 1024;
+      const maxSizeBytes = _maxCacheSizeMB * 1024 * 1024;
 
       if (currentSize > maxSizeBytes) {
         _talker.log(

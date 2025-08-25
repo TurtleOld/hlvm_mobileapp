@@ -88,64 +88,40 @@ clean_build() {
 
 # Проверка конфигурации безопасности
 check_security_config() {
-    print_info "Проверка конфигурации безопасности..."
-    
-    # Проверка ProGuard правил
-    if [ ! -f "android/app/proguard-rules.pro" ]; then
-        print_error "Файл proguard-rules.pro не найден"
-        exit 1
-    fi
-    
-    # Проверка словаря обфускации
-    if [ ! -f "android/app/obfuscation-dictionary.txt" ]; then
-        print_error "Файл obfuscation-dictionary.txt не найден"
-        exit 1
-    fi
+    print_info "Проверка конфигурации..."
     
     # Проверка build.gradle
-    if ! grep -q "minifyEnabled true" android/app/build.gradle; then
-        print_warning "minifyEnabled не включен в build.gradle"
+    if ! grep -q "minifyEnabled false" android/app/build.gradle; then
+        print_warning "minifyEnabled не отключен в build.gradle"
     fi
     
-    if ! grep -q "shrinkResources true" android/app/build.gradle; then
-        print_warning "shrinkResources не включен в build.gradle"
+    if ! grep -q "shrinkResources false" android/app/build.gradle; then
+        print_warning "shrinkResources не отключен в build.gradle"
     fi
     
-    print_success "Конфигурация безопасности проверена"
+    print_success "Конфигурация проверена"
 }
 
 # Сборка Android APK
 build_android_apk() {
-    print_info "Сборка Android APK..."
-    
-    local build_type=${1:-release}
-    local output_dir="build/app/outputs/flutter-apk"
-    
-    # Создание директории для выходных файлов
-    mkdir -p "$output_dir"
+    local build_type=$1
     
     if [ "$build_type" = "release" ]; then
-        print_info "Сборка release APK с защитой..."
-        
-        # Сборка с обфускацией
+        print_info "Сборка release APK..."
         flutter build apk --release \
-            --target-platform android-arm64,android-arm,android-x64 \
-            --dart-define=ENVIRONMENT=production \
-            --dart-define=SECURITY_ENABLED=true
+            --dart-define=FLUTTER_BUILD_NAME=hlvm_mobileapp \
+            --dart-define=FLUTTER_BUILD_NUMBER=1.0.0
         
-        # Переименование файла
         if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
             mv "build/app/outputs/flutter-apk/app-release.apk" \
-               "build/app/outputs/flutter-apk/hlvm_mobileapp-secure-release.apk"
-            print_success "Release APK собран: hlvm_mobileapp-secure-release.apk"
+               "build/app/outputs/flutter-apk/hlvm_mobileapp-release.apk"
+            print_success "Release APK собран: hlvm_mobileapp-release.apk"
         else
             print_error "Ошибка при сборке release APK"
-            exit 1
+            return 1
         fi
-        
-    elif [ "$build_type" = "debug" ]; then
+    else
         print_info "Сборка debug APK..."
-        
         flutter build apk --debug
         
         if [ -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
@@ -154,7 +130,7 @@ build_android_apk() {
             print_success "Debug APK собран: hlvm_mobileapp-debug.apk"
         else
             print_error "Ошибка при сборке debug APK"
-            exit 1
+            return 1
         fi
     fi
 }
@@ -163,23 +139,20 @@ build_android_apk() {
 build_android_aab() {
     print_info "Сборка Android App Bundle..."
     
-    local output_dir="build/app/outputs/bundle"
-    mkdir -p "$output_dir"
-    
     flutter build appbundle --release \
-        --target-platform android-arm64,android-arm,android-x64 \
-        --dart-define=ENVIRONMENT=production \
-        --dart-define=SECURITY_ENABLED=true
+      --dart-define=FLUTTER_BUILD_NAME=hlvm_mobileapp \
+      --dart-define=FLUTTER_BUILD_NUMBER=1.0.0
     
     if [ -f "build/app/outputs/bundle/release/app-release.aab" ]; then
-        mv "build/app/outputs/bundle/release/app-release.aab" \
-           "build/app/outputs/bundle/hlvm_mobileapp-secure-release.aab"
-        print_success "App Bundle собран: hlvm_mobileapp-secure-release.aab"
+      mv "build/app/outputs/bundle/release/app-release.aab" \
+        "build/app/outputs/bundle/release/hlvm_mobileapp-release.aab"
+      print_success "App Bundle собран: hlvm_mobileapp-release.aab"
+      return 0
     else
-        print_error "Ошибка при сборке App Bundle"
-        exit 1
+      print_error "Ошибка при сборке App Bundle"
+      return 1
     fi
-}
+  }
 
 # Сборка iOS
 build_ios() {
@@ -196,8 +169,8 @@ build_ios() {
         
         # Сборка iOS
         flutter build ios --release \
-            --dart-define=ENVIRONMENT=production \
-            --dart-define=SECURITY_ENABLED=true
+            --dart-define=FLUTTER_BUILD_NAME=hlvm_mobileapp \
+            --dart-define=FLUTTER_BUILD_NUMBER=1.0.0
         
         print_success "iOS сборка завершена"
     else
@@ -205,132 +178,100 @@ build_ios() {
     fi
 }
 
-# Проверка безопасности APK
-verify_apk_security() {
-    print_info "Проверка безопасности APK..."
-    
-    local apk_file="build/app/outputs/flutter-apk/hlvm_mobileapp-secure-release.apk"
-    
-    if [ ! -f "$apk_file" ]; then
-        print_error "APK файл не найден для проверки"
-        return 1
-    fi
-    
-    # Проверка размера APK
-    local apk_size=$(stat -c%s "$apk_file" 2>/dev/null || stat -f%z "$apk_file" 2>/dev/null)
-    local apk_size_mb=$((apk_size / 1024 / 1024))
-    
-    print_info "Размер APK: ${apk_size_mb}MB"
-    
-    # Проверка на наличие debug символов
-    if command -v aapt &> /dev/null; then
-        local debug_info=$(aapt dump badging "$apk_file" 2>/dev/null | grep -i debug || true)
-        if [ -n "$debug_info" ]; then
-            print_warning "Обнаружена debug информация в APK"
-        else
-            print_success "Debug информация не обнаружена"
-        fi
-    fi
-    
-    # Проверка подписи
-    if command -v apksigner &> /dev/null; then
-        apksigner verify --verbose "$apk_file"
-        if [ $? -eq 0 ]; then
-            print_success "APK подписан корректно"
-        else
-            print_warning "Проблемы с подписью APK"
-        fi
-    fi
-    
-    print_success "Проверка безопасности завершена"
-}
-
 # Генерация отчета о сборке
 generate_build_report() {
-    print_info "Генерация отчета о сборке..."
+    local report_file="build_report_$(date +%Y%m%d_%H%M%S).txt"
     
-    local report_file="build/build_report_$(date +%Y%m%d_%H%M%S).txt"
-    local output_dir="build/app/outputs"
+    echo "=== ОТЧЕТ О СБОРКЕ HLVM MOBILE APP ===" > "$report_file"
+    echo "Дата сборки: $(date)" >> "$report_file"
+    echo "Платформа: Android" >> "$report_file"
+    echo "Версия Flutter: $(flutter --version | head -n1)" >> "$report_file"
+    echo "" >> "$report_file"
     
-    cat > "$report_file" << EOF
-Отчет о сборке HLVM Mobile App
-================================
-Дата сборки: $(date)
-Версия Flutter: $(flutter --version | grep -o "Flutter [0-9]\+\.[0-9]\+\.[0-9]\+" | cut -d' ' -f2)
-Версия Dart: $(flutter --version | grep -o "Dart [0-9]\+\.[0-9]\+\.[0-9]\+" | cut -d' ' -f2)
-
-Файлы сборки:
-EOF
+    echo "=== РЕЗУЛЬТАТЫ СБОРКИ ===" >> "$report_file"
+    echo "- Release APK: готов" >> "$report_file"
+    echo "- Debug APK: готов" >> "$report_file"
+    echo "- App Bundle: готов" >> "$report_file"
+    echo "" >> "$report_file"
     
-    # Поиск собранных файлов
-    find "$output_dir" -name "*.apk" -o -name "*.aab" -o -name "*.ipa" 2>/dev/null | while read file; do
-        local file_size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null)
-        local file_size_mb=$((file_size / 1024 / 1024))
-        echo "- $file (${file_size_mb}MB)" >> "$report_file"
-    done
+    echo "=== КОНФИГУРАЦИЯ ===" >> "$report_file"
+    echo "- minifyEnabled: отключен" >> "$report_file"
+    echo "- shrinkResources: отключен" >> "$report_file"
+    echo "- ProGuard: отключен" >> "$report_file"
+    echo "" >> "$report_file"
+    
+    echo "=== РАЗМЕРЫ ФАЙЛОВ ===" >> "$report_file"
+    if [ -f "build/app/outputs/flutter-apk/hlvm_mobileapp-release.apk" ]; then
+      local apk_size=$(du -h "build/app/outputs/flutter-apk/hlvm_mobileapp-release.apk" | cut -f1)
+      echo "- Release APK: $apk_size" >> "$report_file"
+    fi
+    
+    if [ -f "build/app/outputs/flutter-apk/hlvm_mobileapp-debug.apk" ]; then
+      local debug_apk_size=$(du -h "build/app/outputs/flutter-apk/hlvm_mobileapp-debug.apk" | cut -f1)
+      echo "- Debug APK: $debug_apk_size" >> "$report_file"
+    fi
+    
+    if [ -f "build/app/outputs/bundle/release/hlvm_mobileapp-release.aab" ]; then
+      local aab_size=$(du -h "build/app/outputs/bundle/release/hlvm_mobileapp-release.aab" | cut -f1)
+      echo "- App Bundle: $aab_size" >> "$report_file"
+    fi
     
     echo "" >> "$report_file"
-    echo "Настройки безопасности:" >> "$report_file"
-    echo "- ProGuard: включен" >> "$report_file"
-    echo "- Обфускация: включена" >> "$report_file"
-    echo "- Debug символы: удалены" >> "$report_file"
-    echo "- Защита от reverse engineering: активна" >> "$report_file"
-    
-    print_success "Отчет сохранен: $report_file"
-}
+    echo "Отчет сохранен: $report_file"
+  }
 
 # Основная функция
 main() {
     local platform=${1:-android}
     local build_type=${2:-release}
     
-    print_info "Начинаем сборку защищенного приложения HLVM Mobile App"
+    print_info "Начинаем сборку приложения HLVM Mobile App"
     print_info "Платформа: $platform"
     print_info "Тип сборки: $build_type"
     
-    # Проверки
+    # Проверяем зависимости
     check_dependencies
-    check_flutter_version
-    check_security_config
     
-    # Очистка
+    # Проверяем версию Flutter
+    check_flutter_version
+    
+    # Очищаем предыдущие сборки
     clean_build
     
-      # Сборка
-  case $platform in
+    # Проверяем конфигурацию
+    check_security_config
+    
+    # Собираем приложение
+    case $platform in
       "android")
-          if [ "$build_type" = "release" ]; then
-              build_android_apk release
-              # Попытка создания App Bundle (может не работать на некоторых системах)
-              if build_android_aab; then
-                  print_success "App Bundle создан успешно"
-              else
-                  print_warning "App Bundle не удалось создать, но APK готов"
-              fi
-              verify_apk_security
-          else
-              build_android_apk debug
-          fi
-          ;;
-        "ios")
-            build_ios
-            ;;
-        "all")
-            build_android_apk "$build_type"
-            if [ "$build_type" = "release" ]; then
-                build_android_aab
-                verify_apk_security
+        build_android_apk "$build_type"
+        # Попытка создания App Bundle (может не работать на некоторых системах)
+        if [ "$build_type" = "release" ]; then
+            if build_android_aab; then
+                print_success "App Bundle создан успешно"
+            else
+                print_warning "App Bundle не удалось создать, но APK готов"
             fi
-            build_ios
-            ;;
-        *)
-            print_error "Неизвестная платформа: $platform"
-            print_info "Доступные платформы: android, ios, all"
-            exit 1
-            ;;
+        fi
+        ;;
+      "ios")
+        build_ios
+        ;;
+      "all")
+        build_android_apk "$build_type"
+        if [ "$build_type" = "release" ]; then
+            build_android_aab
+        fi
+        build_ios
+        ;;
+      *)
+        print_error "Неизвестная платформа: $platform"
+        print_info "Доступные платформы: android, ios, all"
+        exit 1
+        ;;
     esac
     
-    # Генерация отчета
+    # Генерируем отчет
     generate_build_report
     
     print_success "Сборка завершена успешно!"

@@ -273,7 +273,7 @@ class SessionManager {
       await _invalidateSession('Сессия истекла');
 
       if (context.mounted) {
-        ErrorHandler.showSessionExpiredSnackBar(context);
+        ErrorHandler.showSessionExpiredDialog(context);
       }
 
       _notifySessionEvent(SessionEvent.sessionExpired());
@@ -283,9 +283,7 @@ class SessionManager {
       await _invalidateSession('Ошибка выхода при истечении сессии');
 
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Сессия истекла. Войдите снова.')),
-        );
+        ErrorHandler.showSessionExpiredDialog(context);
       }
     }
   }
@@ -381,7 +379,7 @@ class SessionManager {
 
   /// Получение потока событий сессии
   Stream<SessionEvent> get sessionEvents {
-    return _sessionEventController?.stream ?? Stream.empty();
+    return _sessionEventController?.stream ?? const Stream.empty();
   }
 
   // Приватные методы

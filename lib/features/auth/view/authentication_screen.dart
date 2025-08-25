@@ -40,29 +40,20 @@ class _LoginScreenState extends State<LoginScreen>
       vsync: this,
     );
 
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
 
-    _slideAnimation = Tween<double>(
-      begin: 50.0,
-      end: 0.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutBack,
-    ));
+    _slideAnimation = Tween<double>(begin: 50.0, end: 0.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
+    );
 
-    _logoScaleAnimation = Tween<double>(
-      begin: 0.5,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _logoAnimationController,
-      curve: Curves.elasticOut,
-    ));
+    _logoScaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _logoAnimationController,
+        curve: Curves.elasticOut,
+      ),
+    );
 
     _animationController.forward();
     _logoAnimationController.forward();
@@ -85,10 +76,9 @@ class _LoginScreenState extends State<LoginScreen>
       // Отключаем автозаполнение после успешной отправки
       TextInput.finishAutofillContext(shouldSave: true);
 
-      context.read<AuthBloc>().add(LoginRequested(
-            username: username,
-            password: password,
-          ));
+      context.read<AuthBloc>().add(
+        LoginRequested(username: username, password: password),
+      );
     }
   }
 
@@ -107,6 +97,22 @@ class _LoginScreenState extends State<LoginScreen>
       return 'Пароль должен содержать минимум 6 символов';
     }
     return null;
+  }
+
+  void _resetBruteforceProtection() {
+    final username = _usernameController.text.trim();
+    if (username.isNotEmpty) {
+      context.read<AuthBloc>().add(
+        ResetBruteforceProtection(username: username),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Сначала введите логин'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
   }
 
   @override
@@ -231,18 +237,18 @@ class _LoginScreenState extends State<LoginScreen>
               Text(
                 'Добро пожаловать',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppTheme.textPrimary,
-                    ),
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.textPrimary,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 6),
               Text(
                 'Войдите в свою учетную запись',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textSecondary,
-                      fontSize: 13,
-                    ),
+                  color: AppTheme.textSecondary,
+                  fontSize: 13,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -355,8 +361,9 @@ class _LoginScreenState extends State<LoginScreen>
                           width: 20,
                           height: 20,
                           child: CircularProgressIndicator(
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                             strokeWidth: 2,
                           ),
                         )
@@ -367,6 +374,24 @@ class _LoginScreenState extends State<LoginScreen>
                             fontWeight: FontWeight.w600,
                           ),
                         ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Временная кнопка для сброса блокировки (убрать в продакшене)
+              SizedBox(
+                height: 36,
+                child: TextButton(
+                  onPressed: () => _resetBruteforceProtection(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.errorRed,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Сбросить блокировку (DEV)',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                  ),
                 ),
               ),
             ],
@@ -408,10 +433,7 @@ class _LoginScreenState extends State<LoginScreen>
               const Expanded(
                 child: Text(
                   'Безопасность',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
             ],

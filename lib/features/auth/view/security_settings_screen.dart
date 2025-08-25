@@ -1,13 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/security_manager_service.dart';
-import '../../../core/services/reverse_engineering_protection_service.dart';
-import '../../../core/services/code_obfuscation_service.dart';
-import '../../../core/services/debug_protection_service.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/loading_widget.dart';
-import '../../../core/widgets/error_widget.dart';
 
 class SecuritySettingsScreen extends StatefulWidget {
   const SecuritySettingsScreen({super.key});
@@ -18,15 +11,10 @@ class SecuritySettingsScreen extends StatefulWidget {
 
 class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   final SecurityManagerService _securityManager = SecurityManagerService();
-  final ReverseEngineeringProtectionService _reverseEngineeringProtection =
-      ReverseEngineeringProtectionService();
-  final CodeObfuscationService _codeObfuscation = CodeObfuscationService();
-  final DebugProtectionService _debugProtection = DebugProtectionService();
 
   bool _isLoading = false;
   bool _isSecurityActive = false;
   bool _isAppBlocked = false;
-  Map<String, dynamic> _securityStatus = {};
   Map<String, bool> _securityTestResults = {};
 
   @override
@@ -43,7 +31,6 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     try {
       _isSecurityActive = _securityManager.isSecurityActive;
       _isAppBlocked = _securityManager.isAppBlocked;
-      _securityStatus = _securityManager.getSecurityStatus();
     } catch (e) {
       // Обработка ошибок
     } finally {
@@ -66,7 +53,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Тест безопасности завершен'),
             backgroundColor: Colors.green,
           ),
@@ -139,7 +126,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Приложение разблокировано'),
             backgroundColor: Colors.green,
           ),
@@ -172,7 +159,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Система безопасности перезапущена'),
             backgroundColor: Colors.green,
           ),
@@ -436,95 +423,16 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
-            _buildProtectionItem(
-              'Защита от reverse engineering',
-              'Обнаруживает попытки взлома и анализа кода',
-              Icons.code,
-              Colors.blue,
-            ),
-            _buildProtectionItem(
-              'Обфускация кода',
-              'Защищает исходный код от анализа',
-              Icons.visibility_off,
-              Colors.green,
-            ),
-            _buildProtectionItem(
-              'Защита от отладки',
-              'Предотвращает подключение отладчиков',
-              Icons.bug_report,
-              Colors.orange,
-            ),
-            _buildProtectionItem(
-              'Проверка целостности',
-              'Контролирует целостность приложения',
-              Icons.verified,
-              Colors.purple,
-            ),
-            _buildProtectionItem(
-              'Обнаружение эмуляторов',
-              'Выявляет запуск на эмуляторах',
-              Icons.phone_android,
-              Colors.red,
-            ),
-            _buildProtectionItem(
-              'Root/Джейлбрейк детекция',
-              'Обнаруживает взломанные устройства',
-              Icons.shield,
-              Colors.indigo,
-            ),
+            // Все защиты отключены
           ],
         ),
       ),
     );
   }
 
-  Widget _buildProtectionItem(
-      String title, String description, IconData icon, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                Text(
-                  description,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade600,
-                      ),
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.check_circle,
-            color: Colors.green,
-            size: 20,
-          ),
-        ],
-      ),
-    );
-  }
 
   String _getTestName(String key) {
     switch (key) {
-      case 'reverseEngineering':
-        return 'Защита от reverse engineering';
-      case 'codeObfuscation':
-        return 'Обфускация кода';
-      case 'debugProtection':
-        return 'Защита от отладки';
-      case 'integrity':
-        return 'Целостность приложения';
       default:
         return key;
     }

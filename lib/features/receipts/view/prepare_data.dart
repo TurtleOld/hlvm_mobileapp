@@ -31,7 +31,7 @@ class PrepareData {
 
   Future<Map<String, dynamic>> prepareData(
       Map<String, dynamic> jsonData) async {
-    final storage = const FlutterSecureStorage();
+    const storage = FlutterSecureStorage();
     final accessToken = await storage.read(key: 'access_token');
     final prefs = await SharedPreferences.getInstance();
     final selectedAccount = prefs.getInt('selectedAccountId');
