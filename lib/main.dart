@@ -503,10 +503,13 @@ class _MyAppState extends State<MyApp> {
           ),
         ),
         BlocProvider<AuthBloc>(
-          create: (context) => AuthBloc(
-            authService: widget.authService,
-            talkerBloc: context.read<TalkerBloc>(),
-          )..add(const CheckAuthStatus()),
+          create: (context) {
+            final talkerBloc = context.read<TalkerBloc>();
+            return AuthBloc(
+              authService: widget.authService,
+              talkerBloc: talkerBloc,
+            )..add(const CheckAuthStatus());
+          },
         ),
         BlocProvider<FinanceAccountBloc>(
           create: (context) => FinanceAccountBloc(
@@ -550,37 +553,48 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
-      builder: (context, state) {
-        if (state is AuthLoading) {
-          return const Scaffold(
-            backgroundColor: AppTheme.backgroundColor,
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text(
-                    'Проверка авторизации...',
-                    style: TextStyle(
-                      color: Colors.black87,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        } else if (state is AuthAuthenticated) {
-          return const HomePage();
-        } else if (state is AuthError) {
-          // При ошибке показываем экран входа, но с сообщением об ошибке
-          return const LoginScreen();
-        } else {
-          return const LoginScreen();
-        }
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        // print('AuthWrapper: State changed to ${state.runtimeType}');
       },
+      child: BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, state) {
+          // Добавляем отладочную информацию
+          // print('AuthWrapper: Current state is ${state.runtimeType}');
+          
+          if (state is AuthLoading) {
+            return const Scaffold(
+              backgroundColor: AppTheme.backgroundColor,
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text(
+                      'Проверка авторизации...',
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          } else if (state is AuthAuthenticated) {
+            print('AuthWrapper: User is authenticated, showing HomePage');
+            return const HomePage();
+          } else if (state is AuthError) {
+            // print('AuthWrapper: Auth error, showing LoginScreen');
+            // При ошибке показываем экран входа, но с сообщением об ошибке
+            return const LoginScreen();
+          } else {
+            // print('AuthWrapper: User is not authenticated, showing LoginScreen');
+            return const LoginScreen();
+          }
+        },
+      ),
     );
   }
 }

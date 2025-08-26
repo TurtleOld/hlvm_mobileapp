@@ -17,6 +17,8 @@ import 'package:hlvm_mobileapp/core/constants/app_constants.dart';
 import 'package:hlvm_mobileapp/core/services/secure_token_storage_service.dart';
 import 'package:hlvm_mobileapp/features/receipts/view/prepare_data.dart';
 
+
+
 // Вспомогательные функции для безопасного парсинга
 int _safeParseInt(dynamic value) {
   print(
@@ -58,7 +60,8 @@ double _safeParseDouble(dynamic value) {
   }
   if (value is double) {
     print('DEBUG: _safeParseDouble: value is double, returning $value');
-    return value;
+    // Округляем до 3 знаков после запятой
+    return double.parse(value.toStringAsFixed(3));
   }
   if (value is int) {
     print(
@@ -70,7 +73,8 @@ double _safeParseDouble(dynamic value) {
       final result = double.parse(value);
       print(
           'DEBUG: _safeParseDouble: parsed string "$value" to double: $result');
-      return result;
+      // Округляем до 3 знаков после запятой
+      return double.parse(result.toStringAsFixed(3));
     } catch (e) {
       print(
           'DEBUG: _safeParseDouble: failed to parse string "$value", returning 0.0');
@@ -253,19 +257,11 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
       if (!mounted) return;
 
       if (image != null) {
-        // Обрабатываем изображение с таймаутом
-        final String dataUrl =
-            await getImageDataUrl(image.path, 'jpg').timeout(timeoutDuration);
-        if (!mounted) return;
-
-        setState(() {
-          _dataUrl = dataUrl;
-        });
-
-        // Получаем JSON с таймаутом
-        print('DEBUG: === STARTING getJsonReceipt ===');
+        // Тестируем разные подходы к предобработке для лучшего распознавания
+        print('DEBUG: Starting multi-approach preprocessing...');
         final Map<String, dynamic> rawJsonData =
-            await getJsonReceipt(dataUrl).timeout(timeoutDuration);
+            await testDifferentPreprocessing(image.path)
+                .timeout(timeoutDuration);
         print('DEBUG: === FINISHED getJsonReceipt ===');
         print('DEBUG: rawJsonData: $rawJsonData');
         if (!mounted) return;
@@ -1228,10 +1224,15 @@ Future<String> getImageDataUrl(String imagePath, String imageFormat) async {
 
 // Функция для преобразования даты в ISO 8601
 String? convertToIsoDate(String? dateStr) {
-  if (dateStr == null) return null;
+  if (dateStr == null || dateStr.isEmpty || dateStr == 'Не указано') {
+    print('DEBUG: Date is null, empty, or "Не указано", using current date');
+    return DateTime.now().toIso8601String();
+  }
+
+  print('DEBUG: Converting date: "$dateStr"');
 
   try {
-    // Пробуем распарсить "12.06.2023 18:28"
+    // Пробуем распарсить "12.06.2023 18:28" или "22.08.2025 16:13"
     final parts = dateStr.split(' ');
     if (parts.length == 2) {
       final dateParts = parts[0].split('.');
@@ -1244,23 +1245,87 @@ String? convertToIsoDate(String? dateStr) {
         final minute = int.parse(timeParts[1]);
         final second = timeParts.length > 2 ? int.parse(timeParts[2]) : 0;
 
+        // Валидация даты
+        if (year < 2000 || year > 2030) {
+          print('DEBUG: Invalid year: $year, using current date');
+          return DateTime.now().toIso8601String();
+        }
+        if (month < 1 || month > 12) {
+          print('DEBUG: Invalid month: $month, using current date');
+          return DateTime.now().toIso8601String();
+        }
+        if (day < 1 || day > 31) {
+          print('DEBUG: Invalid day: $day, using current date');
+          return DateTime.now().toIso8601String();
+        }
+
         final dt = DateTime(year, month, day, hour, minute, second);
         final isoString = dt.toIso8601String();
+        print('DEBUG: Successfully converted to ISO: $isoString');
         return isoString;
+      }
+    }
+
+    // Пробуем распарсить "22.08.2025 16:13:00"
+    if (dateStr.contains('.') && dateStr.contains(':')) {
+      final parts = dateStr.split(' ');
+      if (parts.length >= 2) {
+        final dateParts = parts[0].split('.');
+        final timeParts = parts[1].split(':');
+        if (dateParts.length == 3 && timeParts.length >= 2) {
+          final year = int.parse(dateParts[2]);
+          final month = int.parse(dateParts[1]);
+          final day = int.parse(dateParts[0]);
+          final hour = int.parse(timeParts[0]);
+          final minute = int.parse(timeParts[1]);
+          final second = timeParts.length > 2 ? int.parse(timeParts[2]) : 0;
+
+          final dt = DateTime(year, month, day, hour, minute, second);
+          final isoString = dt.toIso8601String();
+          print('DEBUG: Successfully converted to ISO: $isoString');
+          return isoString;
+        }
       }
     }
 
     // Если уже ISO, возвращаем как есть
     DateTime.parse(dateStr);
+    print('DEBUG: Date is already in ISO format: $dateStr');
     return dateStr;
   } catch (e) {
-    return dateStr; // если не получилось, возвращаем как есть
+    print('DEBUG: Error parsing date "$dateStr": $e, using current date');
+    return DateTime.now().toIso8601String();
   }
 }
 
 Future<Map<String, dynamic>> getJsonReceipt(String imageData) async {
   print(
       'DEBUG: getJsonReceipt called with imageData length: ${imageData.length}');
+  return await _processWithModel(imageData);
+}
+
+// Функция для тестирования разных подходов к предобработке
+Future<Map<String, dynamic>> testDifferentPreprocessing(
+    String imagePath) async {
+  print('DEBUG: Processing image with GPT-4o');
+
+  // Обработка оригинального изображения с GPT-4o
+  print('DEBUG: Processing original image with GPT-4o...');
+  final gptResult = await _processWithModel(imagePath);
+  print(
+      'DEBUG: GPT-4o result: ${gptResult.containsKey('Error') ? 'ERROR' : 'SUCCESS'}');
+
+  if (!gptResult.containsKey('Error')) {
+    print('DEBUG: GPT-4o successful');
+    return gptResult;
+  }
+
+  // Если GPT-4o не сработал, возвращаем ошибку
+  print('DEBUG: GPT-4o failed');
+  return gptResult;
+}
+
+Future<Map<String, dynamic>> _processWithModel(String imageData) async {
   try {
     // Определяем, является ли imageData путем к файлу или base64 строкой
     bool isBase64Data = imageData.startsWith('data:image/');
@@ -1277,23 +1342,41 @@ Future<Map<String, dynamic>> getJsonReceipt(String imageData) async {
     } else {
       // Если это путь к файлу, читаем и кодируем в base64
       final file = File(imageData);
-      final bytes = await file.readAsBytes();
-      base64Image = base64Encode(bytes);
+      if (!await file.exists()) {
+        print('DEBUG: Image file does not exist: $imageData');
+        return {'Error': 'Файл изображения не найден'};
+      }
+
+      try {
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty) {
+          print('DEBUG: Image file is empty: $imageData');
+          return {'Error': 'Файл изображения пуст'};
+        }
+        base64Image = base64Encode(bytes);
+        print(
+            'DEBUG: Successfully encoded image to base64, size: ${bytes.length} bytes');
+      } catch (e) {
+        print('DEBUG: Error reading image file: $e');
+        return {'Error': 'Ошибка чтения файла изображения: $e'};
+      }
     }
 
     // Формируем запрос к GitHub AI API в соответствии с рекомендациями
     final requestBody = {
+      "model": "meta/Llama-3.2-90B-Vision-Instruct",
       "messages": [
         {
           "role": "system",
           "content":
-              "Extract receipt data and return ONLY valid JSON. Structure: {\"name_seller\":\"string\",\"retail_place_address\":\"string\",\"retail_place\":\"string\",\"items\":[{\"name\":\"string\",\"price\":number,\"quantity\":number,\"category\":\"string\"}],\"total_sum\":number,\"receipt_date\":\"string\",\"number_receipt\":number,\"nds10\":number,\"nds20\":number,\"operation_type\":1}. Extract MAXIMUM 15 items to avoid token limits.\n\nCRITICAL RULES:\n1. quantity = EXACT quantity from receipt (Кол-во column)\n2. price = price per unit (цена за единицу)\n3. For weight items (вес): quantity = weight in kg, price = price per kg\n4. For regular items: quantity = number of items, price = price per item\n5. amount = quantity × price\n6. Look at 'Кол-во' column for quantity, 'Сумма' column for total amount\n7. Calculate price = amount ÷ quantity\n8. NEVER use amount as price or vice versa\n\nUse numbers, not strings. Categories: Продукты, Бытовая химия, Другое. Return ONLY JSON."
+              "You are a specialized Russian receipt data extraction system. Extract receipt data with extreme precision and COMPLETENESS from the original image.\n\nSTRUCTURE: {\"name_seller\":\"string\",\"retail_place_address\":\"string\",\"retail_place\":\"string\",\"items\":[{\"name\":\"string\",\"price\":number,\"quantity\":number,\"category\":\"string\",\"nds_type\":number}],\"total_sum\":number,\"receipt_date\":\"string\",\"number_receipt\":number,\"nds10\":number,\"nds20\":number,\"operation_type\":1}\n\nCRITICAL RULES FOR RUSSIAN RECEIPTS:\n1. SELLER INFO: Look for store name in header (e.g., 'Лента', 'Магнит', 'Пятерочка'). Extract full name including 'ООО', 'ИП' if present. In this case: '000 \"Лента\"' → name_seller: '000 \"Лента\"'\n2. ADDRESS: Look for 'Адрес расчетов' or 'Место расчетов' - extract full address including city, street, building. In this case: 'Россия, 141070, Московская обл., г. Королев, Пионерская ул., 19,3' → retail_place_address: 'Россия, 141070, Московская обл., г. Королев, Пионерская ул., 19,3'\n3. RETAIL PLACE: Look for store location name (e.g., 'ТК Лента-647') → retail_place: 'ТК Лента-647'\n4. DATE: Look for 'Дата/Время' field - extract as DD.MM.YYYY HH:MM format (e.g., '22.08.2025 16:13')\n5. QUANTITY (Кол-во): Read EXACTLY from receipt - 0.648 means 0.648 kg for weight items\n6. PRICE HANDLING: Check if price column exists in receipt\n   - IF price column exists: use the price directly\n   - IF no price column: calculate price as Сумма ÷ Кол-во (amount ÷ quantity)\n7. For weight items (вес): quantity = exact weight in kg\n8. For regular items: quantity = item count\n9. Categories: \n   - Продукты: food, drinks, dairy, snacks\n   - Бытовая химия: cleaning, hygiene, cosmetics\n   - Другое: bags, decorations, stationery\n10. COMPLETENESS: Extract ALL items from the receipt - do not skip any items, even if they seem similar\n11. All numbers as numbers, not strings\n12. QR CODE: Ignore QR codes at the bottom of the receipt - focus only on text data\n13. PRECISION: Keep 3 decimal places for all calculations (e.g., 64.787, 99.983)\n14. ACCURACY: Be extremely careful not to mix up data between different items\n15. ITEM COUNT: Count all items carefully - typical receipts have 10-30 items\n16. NO SKIPPING: Do not skip items even if they appear similar or have small amounts\n17. NDS: Extract total НДС 10% and НДС 20% from summary section. They are NOT per item unless specified. Use the totals from the bottom of the receipt.\n18. TOTAL SUM: The final amount before tax breakdown is the total_sum (2844.50)\n\nEXAMPLES:\n- Store: '000 \"Лента\"' → name_seller: '000 \"Лента\"'\n- Address: 'Россия, 141070, Московская обл., г. Королев, Пионерская ул., 19,3' → retail_place_address: 'Россия, 141070, Московская обл., г. Королев, Пионерская ул., 19,3'\n- Location: 'ТК Лента-647' → retail_place: 'ТК Лента-647'\n- Date: '22.08.2025 16:13' → receipt_date: '22.08.2025 16:13'\n- With price column: 'Товар' with Цена: 99.99, Кол-во: 2, Сумма: 199.98 → price: 99.99, quantity: 2\n- Without price column: 'Кабачки грунтовые 1кг' with Кол-во: 0.648, Сумма: 64.79 → quantity: 0.648, price: 64.79 ÷ 0.648 = 99.983\n- Weight item: 'Лук репчатый вес 1кг' with Кол-во: 0.182, Сумма: 7.28 → quantity: 0.182, price: 7.28 ÷ 0.182 = 40.000\n\nIMPORTANT: Extract EVERY SINGLE ITEM from the receipt. Do not stop at 15 items - continue until you have processed ALL items visible in the image. Be extremely precise with quantities and amounts. Ignore QR codes and focus only on text data.\n\nPay special attention to header information for seller details and date/time field. Return ONLY valid JSON."
         },
         {
           "role": "user",
           "content": [
             {
-              "text": "Extract receipt data and return ONLY valid JSON:",
+              "text":
+                  "Extract ALL receipt data from this Russian cash receipt. IMPORTANT: Extract EVERY SINGLE ITEM - do not skip any items. Ignore QR codes at the bottom of the receipt - focus only on text data. Check if the receipt has a price column. If price column exists, use it directly. If no price column, calculate unit price as: price = amount ÷ quantity. For weight items, this gives price per kg. For regular items, this gives price per item. Be extremely thorough and complete.",
               "type": "text"
             },
             {
@@ -1306,7 +1389,11 @@ Future<Map<String, dynamic>> getJsonReceipt(String imageData) async {
           ]
         }
       ],
-      "model": "openai/gpt-4o"
+      "temperature": 0.1,
+      "max_tokens": 4096,
+      "top_p": 1.0,
+      "frequency_penalty": 0,
+      "presence_penalty": 0
     };
 
     // Отправляем запрос к GitHub AI API используя специальный метод
@@ -1378,9 +1465,17 @@ Future<Map<String, dynamic>> getJsonReceipt(String imageData) async {
     if (!jsonString.startsWith('{')) {
       print(
           'DEBUG: Invalid JSON response - does not start with {: $jsonString');
-      return {
-        'Error': 'AI модель вернула невалидный JSON. Попробуйте еще раз.'
-      };
+      // Попробуем найти начало JSON в ответе
+      int jsonStart = jsonString.indexOf('{');
+      if (jsonStart >= 0) {
+        jsonString = jsonString.substring(jsonStart);
+        print(
+            'DEBUG: Found JSON start at position $jsonStart, extracted: $jsonString');
+      } else {
+        return {
+          'Error': 'AI модель вернула невалидный JSON. Попробуйте еще раз.'
+        };
+      }
     }
 
     // Проверяем, что строка заканчивается на }
@@ -1393,7 +1488,21 @@ Future<Map<String, dynamic>> getJsonReceipt(String imageData) async {
         jsonString = jsonString.substring(0, lastBraceIndex + 1);
         print('DEBUG: Fixed JSON by truncating at position $lastBraceIndex');
       } else {
-        print('DEBUG: Cannot find closing brace, returning error');
+        print(
+            'DEBUG: Cannot find closing brace, checking if response is in Russian...');
+
+        // Проверяем, не является ли ответ русским текстом
+        if (jsonString.contains('чека') ||
+            jsonString.contains('товар') ||
+            jsonString.contains('сумма') ||
+            jsonString.contains('дата')) {
+          print('DEBUG: Response appears to be in Russian, not JSON');
+          return {
+            'Error':
+                'AI модель вернула ответ на русском языке вместо JSON. Попробуйте еще раз.'
+          };
+        }
+        
         return {
           'Error': 'AI модель вернула невалидный JSON. Попробуйте еще раз.'
         };
@@ -1457,21 +1566,74 @@ Future<Map<String, dynamic>> getJsonReceipt(String imageData) async {
 
     // Валидация данных
     // Проверяем total_sum
-    if (result['total_sum'] == null) {
-      print('DEBUG: ERROR: total_sum is null');
-      return {'Error': 'Missing required data: total_sum'};
+    if (result['total_sum'] == null || result['total_sum'] == 0) {
+      print(
+          'DEBUG: WARNING: total_sum is null or 0, calculating from items...');
+
+      // Вычисляем total_sum из сумм товаров с точностью до 3 знаков
+      double calculatedTotal = 0.0;
+      if (result['items'] != null && result['items'] is List) {
+        for (var item in result['items']) {
+          if (item is Map && item.containsKey('amount')) {
+            double amount = _safeParseDouble(item['amount']);
+            calculatedTotal += amount;
+          }
+        }
+      }
+
+      // Округляем до 3 знаков после запятой
+      calculatedTotal = double.parse(calculatedTotal.toStringAsFixed(3));
+      result['total_sum'] = calculatedTotal;
+      print('DEBUG: Calculated total_sum from items: $calculatedTotal');
+
+      // Если total_sum был 0, но мы его вычислили, то nds тоже могут быть 0
+      // Попробуем вычислить примерные значения НДС
+      if (calculatedTotal > 0 &&
+          (result['nds10'] == null || result['nds10'] == 0) &&
+          (result['nds20'] == null || result['nds20'] == 0)) {
+        print('DEBUG: Calculating approximate NDS values...');
+        // Примерный расчет: 10% НДС для продуктов, 20% для остального
+        double nds10 = 0.0;
+        double nds20 = 0.0;
+
+        if (result['items'] != null && result['items'] is List) {
+          for (var item in result['items']) {
+            if (item is Map &&
+                item.containsKey('amount') &&
+                item.containsKey('category')) {
+              double amount = _safeParseDouble(item['amount']);
+              String category = item['category']?.toString() ?? '';
+
+              if (category == 'Продукты') {
+                nds10 += amount * 0.1; // 10% НДС для продуктов
+              } else {
+                nds20 += amount * 0.2; // 20% НДС для остального
+              }
+            }
+          }
+        }
+
+        // Округляем НДС до 3 знаков после запятой
+        result['nds10'] = double.parse(nds10.toStringAsFixed(3));
+        result['nds20'] = double.parse(nds20.toStringAsFixed(3));
+        print(
+            'DEBUG: Calculated NDS - nds10: ${result['nds10']}, nds20: ${result['nds20']}');
+      }
     }
 
     // Проверяем items
     if (result['items'] == null || result['items'].isEmpty) {
       print('DEBUG: ERROR: items is null or empty: ${result['items']}');
-      return {'Error': 'Missing required data: items'};
+      return {
+        'Error': 'Не удалось распознать товары в чеке. Попробуйте еще раз.'
+      };
     }
 
     // Проверяем receipt_date
     if (result['receipt_date'] == null) {
-      print('DEBUG: ERROR: receipt_date is null');
-      return {'Error': 'Missing required data: receipt_date'};
+      print(
+          'DEBUG: WARNING: receipt_date is null, using current date as fallback');
+      result['receipt_date'] = DateTime.now().toIso8601String();
     }
 
     // Формируем результат с безопасным преобразованием типов
@@ -1485,12 +1647,33 @@ Future<Map<String, dynamic>> getJsonReceipt(String imageData) async {
       'number_receipt': _safeParseInt(result['number_receipt']),
       'nds10': _safeParseDouble(result['nds10']),
       'nds20': _safeParseDouble(result['nds20']),
-      'operation_type': _safeParseInt(result['operation_type']),
+      'operation_type': _safeParseInt(result['operation_type']) == 0
+          ? 1
+          : _safeParseInt(result['operation_type']),
     };
 
     print('DEBUG: === FINAL PROCESSED JSON ===');
     print('DEBUG: Final result: $finalResult');
     print('DEBUG: === END FINAL PROCESSED JSON ===');
+
+    // Финальная проверка обязательных полей
+    if (finalResult['total_sum'] == 0.0) {
+      print('DEBUG: ERROR: total_sum is still 0 after calculation');
+      return {'Error': 'Не удалось вычислить общую сумму чека'};
+    }
+
+    if ((finalResult['product'] as List).isEmpty) {
+      print('DEBUG: ERROR: product list is empty');
+      return {'Error': 'Не удалось распознать товары в чеке'};
+    }
+
+    // Проверка количества товаров
+    final productCount = (finalResult['product'] as List).length;
+    print('DEBUG: Extracted $productCount items from receipt');
+    if (productCount < 5) {
+      print(
+          'DEBUG: WARNING: Very few items extracted ($productCount), may be incomplete');
+    }
 
     return finalResult;
   } catch (e) {

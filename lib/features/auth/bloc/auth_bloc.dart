@@ -16,6 +16,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   })  : _authService = authService ?? AuthService(),
         _talkerBloc = talkerBloc ?? TalkerBloc(talkerService: TalkerService()),
         super(const AuthInitial()) {
+    // print('AuthBloc: Initializing with events');
     on<LoginRequested>(_onLoginRequested);
     on<LogoutRequested>(_onLogoutRequested);
     on<CheckAuthStatus>(_onCheckAuthStatus);
@@ -28,6 +29,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     LoginRequested event,
     Emitter<AuthState> emit,
   ) async {
+    // print('AuthBloc: LoginRequested event received');
     try {
       emit(const AuthLoading());
 
@@ -44,8 +46,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
 
       if (result['success']) {
+        print('AuthBloc: Login successful, emitting AuthAuthenticated');
         emit(AuthAuthenticated(username: event.username));
-        _talkerBloc.add(const ShowSuccessEvent(message: 'Авторизация успешна'));
+        try {
+          _talkerBloc
+              .add(const ShowSuccessEvent(message: 'Авторизация успешна'));
+        } catch (e) {
+          // Игнорируем ошибки TalkerBloc
+        }
       } else {
         emit(AuthError(
           message: result['message'] ?? 'Ошибка авторизации',
@@ -67,8 +75,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       emit(const AuthUnauthenticated());
 
-      _talkerBloc
-          .add(const ShowSuccessEvent(message: 'Вы успешно вышли из аккаунта'));
+      try {
+        _talkerBloc.add(
+            const ShowSuccessEvent(message: 'Вы успешно вышли из аккаунта'));
+      } catch (e) {
+        // Игнорируем ошибки TalkerBloc
+      }
     } catch (e) {
       emit(AuthError(message: 'Ошибка при выходе: $e'));
     }
@@ -78,6 +90,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     CheckAuthStatus event,
     Emitter<AuthState> emit,
   ) async {
+    // print('AuthBloc: CheckAuthStatus event received');
     try {
       emit(const AuthLoading());
 
@@ -86,8 +99,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (isLoggedIn) {
         final username =
             await _authService.getCurrentUsername() ?? 'Пользователь';
+        // print('AuthBloc: User is logged in, emitting AuthAuthenticated');
         emit(AuthAuthenticated(username: username));
       } else {
+        // print('AuthBloc: User is not logged in, emitting AuthUnauthenticated');
         emit(const AuthUnauthenticated());
       }
     } catch (e) {

@@ -73,6 +73,7 @@ class _LoginScreenState extends State<LoginScreen>
       final username = _usernameController.text.trim();
       final password = _passwordController.text.trim();
 
+      // print('LoginScreen: Sending LoginRequested event');
       // Отключаем автозаполнение после успешной отправки
       TextInput.finishAutofillContext(shouldSave: true);
 
@@ -119,7 +120,9 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
+        // print('LoginScreen: State changed to ${state.runtimeType}');
         if (state is AuthAuthenticated) {
+          // print('LoginScreen: User authenticated, finishing autofill context');
           // Завершаем контекст автозаполнения при успешной авторизации
           TextInput.finishAutofillContext(shouldSave: true);
           // Не делаем навигацию - AuthWrapper сам определит экран

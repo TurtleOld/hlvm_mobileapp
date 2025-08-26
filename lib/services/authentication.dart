@@ -118,11 +118,13 @@ class AuthService {
       if (response.statusCode == 200) {
         final accessToken = response.data['access'];
         final refreshToken = response.data['refresh'];
+        // print('AuthService: Saving tokens to secure storage');
         await _secureStorage.write(key: 'access_token', value: accessToken);
         await _secureStorage.write(key: 'refresh_token', value: refreshToken);
         await _secureStorage.write(key: 'isLoggedIn', value: 'true');
         await _secureStorage.write(
             key: 'token_refreshed_at', value: DateTime.now().toIso8601String());
+        // print('AuthService: Tokens saved successfully');
         return {'success': true, 'message': 'Авторизация пройдена'};
       } else {
         String msg = 'Ошибка авторизации';
@@ -154,7 +156,10 @@ class AuthService {
     final isLoggedIn = await _secureStorage.read(key: 'isLoggedIn');
     final accessToken = await _secureStorage.read(key: 'access_token');
     final refreshToken = await _secureStorage.read(key: 'refresh_token');
-    return isLoggedIn == 'true' && accessToken != null && refreshToken != null;
+    final result =
+        isLoggedIn == 'true' && accessToken != null && refreshToken != null;
+    // print('AuthService: isLoggedIn check - isLoggedIn: $isLoggedIn, accessToken: ${accessToken != null}, refreshToken: ${refreshToken != null}, result: $result');
+    return result;
   }
 
   Future<void> refreshToken() async {

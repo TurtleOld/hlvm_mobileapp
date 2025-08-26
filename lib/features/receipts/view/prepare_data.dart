@@ -98,25 +98,53 @@ class PrepareData {
       });
     }
 
-    // Преобразуем дату из DD.MM.YYYY в YYYY-MM-DD HH:MM:SS
+    // Преобразуем дату из DD.MM.YYYY HH:MM в YYYY-MM-DDTHH:MM:SS
     String receiptDate = jsonData['receipt_date']?.toString() ?? '';
-    if (receiptDate.isNotEmpty) {
+    print('DEBUG: Original receipt_date: "$receiptDate"');
+
+    if (receiptDate.isNotEmpty && receiptDate != 'Не указано') {
       try {
-        // Парсим дату из формата DD.MM.YYYY
-        final parts = receiptDate.split('.');
-        if (parts.length == 3) {
-          final day = parts[0];
-          final month = parts[1];
-          final year = parts[2];
-          // Преобразуем в YYYY-MM-DD HH:MM:SS
-          receiptDate = '$year-$month-${day.padLeft(2, '0')} 00:00:00';
-          print(
-              'DEBUG: Converted date from DD.MM.YYYY to ISO format: $receiptDate');
+        // Парсим дату из формата DD.MM.YYYY HH:MM
+        final parts = receiptDate.split(' ');
+        if (parts.length == 2) {
+          final dateParts = parts[0].split('.');
+          final timeParts = parts[1].split(':');
+
+          if (dateParts.length == 3 && timeParts.length >= 2) {
+            final day = dateParts[0].padLeft(2, '0');
+            final month = dateParts[1].padLeft(2, '0');
+            final year = dateParts[2];
+            final hour = timeParts[0].padLeft(2, '0');
+            final minute = timeParts[1].padLeft(2, '0');
+            final second =
+                timeParts.length > 2 ? timeParts[2].padLeft(2, '0') : '00';
+
+            // Преобразуем в YYYY-MM-DDTHH:MM:SS
+            receiptDate = '$year-$month-${day}T$hour:$minute:$second';
+            print('DEBUG: Converted date to ISO format: $receiptDate');
+          }
+        } else if (receiptDate.contains('.')) {
+          // Парсим только дату DD.MM.YYYY
+          final dateParts = receiptDate.split('.');
+          if (dateParts.length == 3) {
+            final day = dateParts[0].padLeft(2, '0');
+            final month = dateParts[1].padLeft(2, '0');
+            final year = dateParts[2];
+            receiptDate = '$year-$month-${day}T00:00:00';
+            print('DEBUG: Converted date-only to ISO format: $receiptDate');
+          }
         }
       } catch (e) {
         print('DEBUG: Error converting date format: $e');
-        // Если не удалось преобразовать, оставляем как есть
+        // Если не удалось преобразовать, используем текущую дату
+        receiptDate = DateTime.now().toIso8601String();
+        print('DEBUG: Using current date: $receiptDate');
       }
+    } else {
+      // Если дата пустая или "Не указано", используем текущую дату
+      receiptDate = DateTime.now().toIso8601String();
+      print(
+          'DEBUG: Date is empty or "Не указано", using current date: $receiptDate');
     }
 
     final numberReceipt = _ensureInt(jsonData['number_receipt'] ?? 0);
