@@ -18,7 +18,6 @@ import 'package:hlvm_mobileapp/core/bloc/talker_bloc.dart';
 import 'package:hlvm_mobileapp/core/widgets/talker_notification_widget.dart';
 import 'package:hlvm_mobileapp/core/utils/global_error_handler.dart';
 
-
 import 'package:hlvm_mobileapp/core/services/cache_service.dart';
 import 'package:hlvm_mobileapp/core/services/app_startup_service.dart';
 import 'package:hlvm_mobileapp/core/services/security_manager_service.dart';
@@ -129,7 +128,6 @@ Future<Widget> _createMainApp() async {
         isAppBlocked: _services['isAppBlocked'] ?? false,
         talkerService: _services['talkerService'] ?? TalkerService(),
         authService: _services['authService'] ?? AuthService(),
-
         cacheService: _services['cacheService'] ?? CacheService(),
         securityManager:
             _services['securityManager'] ?? SecurityManagerService(),
@@ -141,7 +139,6 @@ Future<Widget> _createMainApp() async {
         isAppBlocked: false,
         talkerService: TalkerService(),
         authService: AuthService(),
-
         cacheService: CacheService(),
         securityManager: SecurityManagerService(),
       );
@@ -153,7 +150,6 @@ Future<Widget> _createMainApp() async {
       isAppBlocked: false,
       talkerService: TalkerService(),
       authService: AuthService(),
-      
       cacheService: CacheService(),
       securityManager: SecurityManagerService(),
     );
@@ -332,7 +328,6 @@ class _SplashScreenState extends State<SplashScreen>
         isAppBlocked: false,
         talkerService: TalkerService(),
         authService: AuthService(),
-
         cacheService: CacheService(),
         securityManager: SecurityManagerService(),
       );
@@ -404,7 +399,9 @@ class _SplashScreenState extends State<SplashScreen>
                             borderRadius: BorderRadius.circular(60),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
+                                color: Colors
+                                    .black // ignore: deprecated_member_use
+                                    .withOpacity(0.3),
                                 blurRadius: 20,
                                 offset: const Offset(0, 10),
                               ),
@@ -561,7 +558,7 @@ class AuthWrapper extends StatelessWidget {
         builder: (context, state) {
           // Добавляем отладочную информацию
           // print('AuthWrapper: Current state is ${state.runtimeType}');
-          
+
           if (state is AuthLoading) {
             return const Scaffold(
               backgroundColor: AppTheme.backgroundColor,

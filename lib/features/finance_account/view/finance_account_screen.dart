@@ -300,7 +300,8 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: AppTheme.primaryGreen.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
+                    color: AppTheme.primaryGreen // ignore: deprecated_member_use
+                  .withOpacity(0.3),
                     blurRadius: 15,
                     offset: const Offset(0, 8),
                   ),
@@ -308,7 +309,8 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
               : AppStyles.cardShadow,
           border: isSelected
               ? Border.all(
-                  color: AppTheme.primaryGreen.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
+                  color: AppTheme.primaryGreen // ignore: deprecated_member_use
+                  .withOpacity(0.3),
                   width: 2,
                 )
               : null,

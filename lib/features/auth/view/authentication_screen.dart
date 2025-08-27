@@ -206,7 +206,8 @@ class _LoginScreenState extends State<LoginScreen>
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primaryGreen.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
+                  color: AppTheme.primaryGreen // ignore: deprecated_member_use
+                  .withOpacity(0.3),
                   blurRadius: 15,
                   offset: const Offset(0, 8),
                 ),
@@ -354,7 +355,8 @@ class _LoginScreenState extends State<LoginScreen>
                     backgroundColor: AppTheme.primaryGreen,
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shadowColor: AppTheme.primaryGreen.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
+                    shadowColor: AppTheme.primaryGreen // ignore: deprecated_member_use
+                  .withOpacity(0.3),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),

@@ -507,7 +507,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                   .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: AppTheme.errorRed.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
+                    color: AppTheme.errorRed // ignore: deprecated_member_use
+                  .withOpacity(0.3),
                     width: 1,
                   ),
                 ),
@@ -1015,7 +1016,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryGreen.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
+            color: AppTheme.primaryGreen // ignore: deprecated_member_use
+                  .withOpacity(0.3),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

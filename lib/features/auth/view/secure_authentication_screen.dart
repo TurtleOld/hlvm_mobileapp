@@ -124,8 +124,6 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
     }
   }
 
-
-
   // Brute force protection dialog removed
 
   Future<void> _authenticateWithBiometrics() async {
@@ -137,7 +135,6 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
       ),
     );
   }
-
 
   String? _validateUsername(String? value) {
     if (value == null || value.trim().isEmpty) {
@@ -248,8 +245,8 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primaryGreen// ignore: deprecated_member_use
-                  .withOpacity(0.3),
+                  color: AppTheme.primaryGreen // ignore: deprecated_member_use
+                      .withOpacity(0.3),
                   blurRadius: 15,
                   offset: const Offset(0, 8),
                 ),
@@ -270,12 +267,12 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.blue// ignore: deprecated_member_use
-                  .withOpacity(0.1),
+        color: Colors.blue // ignore: deprecated_member_use
+            .withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.blue// ignore: deprecated_member_use
-                  .withOpacity(0.3),
+          color: Colors.blue // ignore: deprecated_member_use
+              .withOpacity(0.3),
           width: 1,
         ),
       ),
@@ -449,8 +446,9 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
                     backgroundColor: AppTheme.primaryGreen,
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shadowColor: AppTheme.primaryGreen// ignore: deprecated_member_use
-                  .withOpacity(0.3),
+                    shadowColor:
+                        AppTheme.primaryGreen // ignore: deprecated_member_use
+                            .withOpacity(0.3),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -492,12 +490,12 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.orange// ignore: deprecated_member_use
-                  .withOpacity(0.1),
+        color: Colors.orange // ignore: deprecated_member_use
+            .withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: Colors.orange// ignore: deprecated_member_use
-                  .withOpacity(0.3),
+          color: Colors.orange // ignore: deprecated_member_use
+              .withOpacity(0.3),
           width: 1,
         ),
       ),
@@ -528,12 +526,12 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.green// ignore: deprecated_member_use
-                  .withOpacity(0.1),
+        color: Colors.green // ignore: deprecated_member_use
+            .withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.green// ignore: deprecated_member_use
-                  .withOpacity(0.3),
+          color: Colors.green // ignore: deprecated_member_use
+              .withOpacity(0.3),
           width: 1,
         ),
       ),
@@ -583,12 +581,12 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.primaryGreen// ignore: deprecated_member_use
-                  .withOpacity(0.05),
+        color: AppTheme.primaryGreen // ignore: deprecated_member_use
+            .withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppTheme.primaryGreen// ignore: deprecated_member_use
-                  .withOpacity(0.1),
+          color: AppTheme.primaryGreen // ignore: deprecated_member_use
+              .withOpacity(0.1),
           width: 1,
         ),
       ),
@@ -600,8 +598,8 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen// ignore: deprecated_member_use
-                  .withOpacity(0.1),
+                  color: AppTheme.primaryGreen // ignore: deprecated_member_use
+                      .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
