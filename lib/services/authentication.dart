@@ -12,9 +12,9 @@ class AuthService {
   }
 
   void _configureDio() {
-    _dio.options.connectTimeout = const Duration(seconds: 30);
-    _dio.options.receiveTimeout = const Duration(seconds: 30);
-    _dio.options.sendTimeout = const Duration(seconds: 30);
+    _dio.options.connectTimeout = const Duration(seconds: 60);
+    _dio.options.receiveTimeout = const Duration(seconds: 120);
+    _dio.options.sendTimeout = const Duration(seconds: 60);
   }
 
   void addAuthInterceptor() {
@@ -77,7 +77,7 @@ class AuthService {
           server.contains('\n')) {
         return null; // Возвращаем null вместо исключения
       }
-      
+
       // Добавляем /api к базовому URL, если его нет
       String baseUrl = server;
       if (baseUrl.endsWith('/api/')) {
@@ -110,8 +110,8 @@ class AuthService {
         data: {'username': username, 'password': password},
         options: Options(
           headers: {'Content-Type': 'application/json'},
-          sendTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 30),
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 120),
         ),
       );
 
@@ -182,14 +182,14 @@ class AuthService {
         data: {"refresh": refreshToken},
         options: Options(
           headers: {'Content-Type': 'application/json'},
-          sendTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 30),
+          sendTimeout: const Duration(seconds: 60),
+          receiveTimeout: const Duration(seconds: 120),
         ),
       );
 
       final newAccessToken = response.data['access'];
       await _secureStorage.write(key: 'access_token', value: newAccessToken);
-      
+
       // Обновляем время последнего обновления токена
       await _secureStorage.write(
           key: 'token_refreshed_at', value: DateTime.now().toIso8601String());

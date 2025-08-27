@@ -68,7 +68,7 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
       setState(() {
         _addressController.text = settings['address'] ?? '';
         _portController.text = settings['port']?.toString() ?? '';
-        _timeoutController.text = settings['timeout']?.toString() ?? '30';
+        _timeoutController.text = settings['timeout']?.toString() ?? '120';
         _retryAttemptsController.text =
             settings['retryAttempts']?.toString() ?? '3';
         _selectedProtocol = settings['protocol'] ?? 'https';

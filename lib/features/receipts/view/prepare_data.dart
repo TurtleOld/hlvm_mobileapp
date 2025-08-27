@@ -32,14 +32,14 @@ class PrepareData {
     print('DEBUG: === PREPARE DATA START ===');
     print('DEBUG: Input jsonData: $jsonData');
     print('DEBUG: Input keys: ${jsonData.keys.toList()}');
-    
+
     const storage = FlutterSecureStorage();
     final accessToken = await storage.read(key: 'access_token');
     final prefs = await SharedPreferences.getInstance();
     final selectedAccount = prefs.getInt('selectedAccountId');
     final Map<String, dynamic> decodedToken = JwtDecoder.decode(accessToken!);
     final int userId = _ensureInt(decodedToken['user_id']);
-    
+
     print('DEBUG: userId: $userId');
     print('DEBUG: selectedAccount: $selectedAccount');
 
@@ -54,23 +54,39 @@ class PrepareData {
       'retail_place_address': retailPlaceAddress,
       'retail_place': retailPlace,
     };
-    
+
     // Get products information from AI response
-    final items =
-        jsonData['product'] ?? []; // Changed from 'items' to 'product'
+    final items = jsonData['items'] ??
+        jsonData['product'] ??
+        []; // Check both 'items' and 'product'
     final List<Map<String, dynamic>> products = [];
 
     print('DEBUG: Processing ${items.length} items from AI response');
 
     for (int i = 0; i < items.length; i++) {
       final item = items[i];
-      final name = item['name']?.toString() ?? '';
+
+      // Проверяем оба возможных ключа для названия товара
+      String name = '';
+      if (item.containsKey('product_name')) {
+        name = item['product_name']?.toString() ?? '';
+      } else if (item.containsKey('name')) {
+        name = item['name']?.toString() ?? '';
+      }
+
+      // Если название все еще пустое, генерируем fallback
+      if (name.isEmpty) {
+        String category = item['category']?.toString() ?? 'Товар';
+        double price = _ensureDouble(item['price'] ?? 0);
+        double amount = _ensureDouble(item['amount'] ?? 0);
+        name = _generateFallbackProductName(category, price, amount, i + 1);
+        print('DEBUG: Generated fallback name for item $i: "$name"');
+      }
+
       final price = _ensureDouble(item['price'] ?? 0);
       final quantity = _ensureDouble(item['quantity'] ?? 1);
       final category = item['category']?.toString() ?? '';
-
-      // Calculate amount if not provided
-      final amount = price * quantity;
+      final amount = _ensureDouble(item['amount'] ?? (price * quantity));
 
       print(
           'DEBUG: Item $i: name="$name", price=$price, quantity=$quantity, amount=$amount');
@@ -85,7 +101,7 @@ class PrepareData {
       if (amount <= 0) {
         print('DEBUG: WARNING - Item $i has invalid amount: $amount');
       }
-      
+
       products.add({
         'user': userId,
         'product_name': name,
@@ -174,5 +190,54 @@ class PrepareData {
     print('DEBUG: === END PREPARE DATA ===');
 
     return result;
+  }
+
+  /// Генерирует fallback название товара на основе категории, цены и номера
+  String _generateFallbackProductName(
+      String category, double price, double amount, int itemNumber) {
+    // Базовые названия для разных категорий
+    Map<String, List<String>> categoryNames = {
+      'Продукты': [
+        'Продукт питания',
+        'Продукт',
+        'Еда',
+        'Продукт питания',
+        'Продукт',
+      ],
+      'Бытовая химия': [
+        'Средство бытовой химии',
+        'Бытовая химия',
+        'Средство',
+        'Химия',
+        'Бытовая химия',
+      ],
+      'Другое': [
+        'Товар',
+        'Изделие',
+        'Продукт',
+        'Товар',
+        'Изделие',
+      ],
+    };
+
+    // Получаем список названий для категории
+    List<String> names = categoryNames[category] ?? categoryNames['Другое']!;
+
+    // Выбираем название на основе номера товара
+    String baseName = names[itemNumber % names.length];
+
+    // Добавляем информацию о цене, если она есть
+    if (price > 0) {
+      if (price < 50) {
+        baseName += ' (дешевый)';
+      } else if (price > 200) {
+        baseName += ' (дорогой)';
+      }
+    }
+
+    // Добавляем номер товара для уникальности
+    baseName += ' №$itemNumber';
+
+    return baseName;
   }
 }

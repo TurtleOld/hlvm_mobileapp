@@ -4,7 +4,7 @@ class AppConstants {
 
   // API Configuration
   static const String defaultApiBaseUrl = 'https://api.example.com';
-  static const int defaultApiTimeout = 30000;
+  static const int defaultApiTimeout = 120000;
 
   // API Endpoints
   static const String authTokenEndpoint = '/auth/token/';

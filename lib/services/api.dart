@@ -20,9 +20,9 @@ class ApiService {
   /// Создает отдельный Dio клиент для GitHub AI API с GitHub token
   Dio _createGithubApiClient() {
     final dio = Dio();
-    dio.options.connectTimeout = const Duration(seconds: 30);
-    dio.options.receiveTimeout = const Duration(seconds: 30);
-    dio.options.sendTimeout = const Duration(seconds: 30);
+    dio.options.connectTimeout = const Duration(seconds: 60);
+    dio.options.receiveTimeout = const Duration(seconds: 120);
+    dio.options.sendTimeout = const Duration(seconds: 60);
     return dio;
   }
 
@@ -64,7 +64,7 @@ class ApiService {
           serverUrl.contains('\n')) {
         return null; // Возвращаем null вместо исключения
       }
-      
+
       // Добавляем /api к базовому URL, если его нет
       String baseUrl = serverUrl;
       if (baseUrl.endsWith('/api/')) {
@@ -101,7 +101,7 @@ class ApiService {
         return false; // Сервер не настроен
       }
 
-      final timeout = await _serverSettings.getTimeout() ?? 30;
+      final timeout = await _serverSettings.getTimeout() ?? 120;
 
       final response = await _dio.get(
         '$baseUrl/health/',
@@ -125,7 +125,7 @@ class ApiService {
         return null; // Сервер не настроен
       }
 
-      final timeout = await _serverSettings.getTimeout() ?? 30;
+      final timeout = await _serverSettings.getTimeout() ?? 120;
 
       final response = await _dio.get(
         '$baseUrl/info/',
@@ -183,7 +183,7 @@ class ApiService {
         throw Exception("Необходимо указать адрес сервера в настройках");
       }
 
-      final timeout = await _serverSettings.getTimeout() ?? 30;
+      final timeout = await _serverSettings.getTimeout() ?? 120;
       final retryAttempts = await _serverSettings.getMaxRetries() ?? 3;
 
       final response = await _makeRequestWithRetry(
@@ -214,7 +214,7 @@ class ApiService {
         throw Exception("Необходимо указать адрес сервера в настройках");
       }
 
-      final timeout = await _serverSettings.getTimeout() ?? 30;
+      final timeout = await _serverSettings.getTimeout() ?? 120;
       final retryAttempts = await _serverSettings.getMaxRetries() ?? 3;
 
       final response = await _makeRequestWithRetry(
@@ -258,7 +258,7 @@ class ApiService {
         }
       });
       print('DEBUG: === END JSON FIELD DETAILS ===');
-      
+
       final baseUrl = await _baseUrl;
       if (baseUrl == null) {
         print('DEBUG: Server URL is null');
@@ -266,7 +266,7 @@ class ApiService {
       }
 
       print('DEBUG: Using base URL: $baseUrl');
-      final timeout = await _serverSettings.getTimeout() ?? 30;
+      final timeout = await _serverSettings.getTimeout() ?? 120;
       final retryAttempts = await _serverSettings.getMaxRetries() ?? 3;
 
       print('DEBUG: Making POST request to: $baseUrl/receipts/create-receipt/');
@@ -287,7 +287,7 @@ class ApiService {
 
       print('DEBUG: Response status code: ${response.statusCode}');
       print('DEBUG: Response data: ${response.data}');
-      
+
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('DEBUG: Receipt created successfully');
         return 'Чек успешно добавлен!';
@@ -340,7 +340,7 @@ class ApiService {
         throw Exception("Необходимо указать адрес сервера в настройках");
       }
 
-      final timeout = await _serverSettings.getTimeout() ?? 30;
+      final timeout = await _serverSettings.getTimeout() ?? 120;
       final retryAttempts = await _serverSettings.getMaxRetries() ?? 3;
 
       final response = await _makeRequestWithRetry(
