@@ -248,7 +248,7 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primaryGreen.withValues(alpha: 0.3),
+                  color: AppTheme.primaryGreen.withOpacity(0.3),
                   blurRadius: 15,
                   offset: const Offset(0, 8),
                 ),
@@ -269,10 +269,10 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.blue.withValues(alpha: 0.1),
+        color: Colors.blue.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.blue.withValues(alpha: 0.3),
+          color: Colors.blue.withOpacity(0.3),
           width: 1,
         ),
       ),
@@ -446,7 +446,7 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
                     backgroundColor: AppTheme.primaryGreen,
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shadowColor: AppTheme.primaryGreen.withValues(alpha: 0.3),
+                    shadowColor: AppTheme.primaryGreen.withOpacity(0.3),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -488,10 +488,10 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.orange.withValues(alpha: 0.1),
+        color: Colors.orange.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: Colors.orange.withValues(alpha: 0.3),
+          color: Colors.orange.withOpacity(0.3),
           width: 1,
         ),
       ),
@@ -522,10 +522,10 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.1),
+        color: Colors.green.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.green.withValues(alpha: 0.3),
+          color: Colors.green.withOpacity(0.3),
           width: 1,
         ),
       ),
@@ -575,10 +575,10 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.primaryGreen.withValues(alpha: 0.05),
+        color: AppTheme.primaryGreen.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+          color: AppTheme.primaryGreen.withOpacity(0.1),
           width: 1,
         ),
       ),
@@ -590,7 +590,7 @@ class _SecureAuthenticationScreenState extends State<SecureAuthenticationScreen>
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+                  color: AppTheme.primaryGreen.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(

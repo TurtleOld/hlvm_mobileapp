@@ -72,7 +72,7 @@ class _AnimatedGradientCardState extends State<AnimatedGradientCard>
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primaryGreen.withValues(alpha: 0.2),
+                  color: AppTheme.primaryGreen.withOpacity(0.2),
                   blurRadius: _elevationAnimation.value,
                   offset: const Offset(0, 4),
                 ),
@@ -205,7 +205,7 @@ class BalanceCard extends StatelessWidget {
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -364,10 +364,10 @@ class InfoCard extends StatelessWidget {
     return Container(
       padding: AppStyles.cardPadding,
       decoration: BoxDecoration(
-        color: backgroundColor ?? AppTheme.primaryGreen.withValues(alpha: 0.05),
+        color: backgroundColor ?? AppTheme.primaryGreen.withOpacity(0.05),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+          color: AppTheme.primaryGreen.withOpacity(0.1),
           width: 1,
         ),
       ),
@@ -381,7 +381,7 @@ class InfoCard extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   color: (iconColor ?? AppTheme.primaryGreen)
-                      .withValues(alpha: 0.1),
+                      .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -499,7 +499,7 @@ class _AnimatedLoadingIndicatorState extends State<AnimatedLoadingIndicator>
                   height: widget.size,
                   decoration: BoxDecoration(
                     color: (widget.color ?? AppTheme.primaryGreen)
-                        .withValues(alpha: 0.1),
+                        .withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -569,7 +569,7 @@ class EmptyStateWidget extends StatelessWidget {
                   width: 120,
                   height: 120,
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+                    color: AppTheme.primaryGreen.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(

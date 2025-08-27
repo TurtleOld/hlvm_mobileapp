@@ -334,7 +334,6 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                                     width: AppConstants.defaultSpacing),
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
-                                    initialValue: _selectedProtocol,
                                     decoration: const InputDecoration(
                                       labelText: 'Протокол',
                                       border: OutlineInputBorder(),
@@ -430,7 +429,6 @@ class _ServerSettingsScreenState extends State<ServerSettingsScreen> {
                               children: [
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
-                                    initialValue: _selectedApiVersion,
                                     decoration: const InputDecoration(
                                       labelText: 'Версия API',
                                       border: OutlineInputBorder(),

@@ -128,7 +128,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+              color: AppTheme.primaryGreen.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -163,7 +163,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: AppTheme.errorRed.withValues(alpha: 0.1),
+              color: AppTheme.errorRed.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -209,7 +209,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: AppTheme.primaryGreen.withValues(alpha: 0.1),
+              color: AppTheme.primaryGreen.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -297,7 +297,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: AppTheme.primaryGreen.withValues(alpha: 0.3),
+                    color: AppTheme.primaryGreen.withOpacity(0.3),
                     blurRadius: 15,
                     offset: const Offset(0, 8),
                   ),
@@ -305,7 +305,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
               : AppStyles.cardShadow,
           border: isSelected
               ? Border.all(
-                  color: AppTheme.primaryGreen.withValues(alpha: 0.3),
+                  color: AppTheme.primaryGreen.withOpacity(0.3),
                   width: 2,
                 )
               : null,
@@ -327,8 +327,8 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
                         height: 60,
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? Colors.white.withValues(alpha: 0.2)
-                              : AppTheme.primaryGreen.withValues(alpha: 0.1),
+                              ? Colors.white.withOpacity(0.2)
+                              : AppTheme.primaryGreen.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Icon(
@@ -374,7 +374,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.2),
+                            color: Colors.white.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: const Row(
@@ -404,7 +404,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? Colors.white.withValues(alpha: 0.1)
+                          ? Colors.white.withOpacity(0.1)
                           : AppTheme.surfaceColor,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -444,8 +444,8 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
                           ),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? Colors.white.withValues(alpha: 0.2)
-                                : AppTheme.primaryGreen.withValues(alpha: 0.1),
+                                ? Colors.white.withOpacity(0.2)
+                                : AppTheme.primaryGreen.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -469,7 +469,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
                         child: Container(
                           height: 1,
                           color: isSelected
-                              ? Colors.white.withValues(alpha: 0.2)
+                              ? Colors.white.withOpacity(0.2)
                               : AppTheme.dividerColor,
                         ),
                       ),
@@ -496,7 +496,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
                         child: Container(
                           height: 1,
                           color: isSelected
-                              ? Colors.white.withValues(alpha: 0.2)
+                              ? Colors.white.withOpacity(0.2)
                               : AppTheme.dividerColor,
                         ),
                       ),
@@ -520,7 +520,7 @@ class _FinanceAccountScreenState extends State<FinanceAccountScreen>
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: AppTheme.errorRed.withValues(alpha: 0.1),
+              color: AppTheme.errorRed.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
