@@ -22,11 +22,13 @@ jobs:
     - name: Setup Flutter
       uses: subosito/flutter-action@v2.21.0
       with:
-        flutter-version: '3.19.0'
+        flutter-version: '3.24.0'
         channel: 'stable'
     
     - name: Install dependencies
-      run: flutter pub get
+      run: |
+        flutter pub cache clean
+        flutter pub get
     
     - name: Build APK
       run: flutter build apk --release
