@@ -503,10 +503,11 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.errorRed.withOpacity(0.1),
+                  color: AppTheme.errorRed// ignore: deprecated_member_use
+                  .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: AppTheme.errorRed.withOpacity(0.3),
+                    color: AppTheme.errorRed.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
                     width: 1,
                   ),
                 ),
@@ -699,7 +700,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white// ignore: deprecated_member_use
+                  .withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -830,7 +832,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black// ignore: deprecated_member_use
+                  .withOpacity(0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -873,7 +876,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black// ignore: deprecated_member_use
+                  .withOpacity(0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -925,7 +929,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black// ignore: deprecated_member_use
+                  .withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -938,7 +943,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white// ignore: deprecated_member_use
+                  .withOpacity(0.2),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -1009,7 +1015,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryGreen.withOpacity(0.3),
+            color: AppTheme.primaryGreen.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1028,7 +1034,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white// ignore: deprecated_member_use
+                  .withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -1083,7 +1090,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black// ignore: deprecated_member_use
+                  .withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1099,7 +1107,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withOpacity(0.1),
+                  color: AppTheme.primaryGreen// ignore: deprecated_member_use
+                  .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -1170,7 +1179,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.2),
+          color: AppTheme.primaryGreen// ignore: deprecated_member_use
+                  .withOpacity(0.2),
           width: 1,
         ),
       ),

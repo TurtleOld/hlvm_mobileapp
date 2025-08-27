@@ -99,10 +99,11 @@ class ErrorHandler {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.errorRed.withOpacity(0.1),
+                  color: AppTheme.errorRed// ignore: deprecated_member_use
+                  .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: AppTheme.errorRed.withOpacity(0.3),
+                    color: AppTheme.errorRed.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
                     width: 1,
                   ),
                 ),

@@ -134,7 +134,7 @@ class AppTheme {
         foregroundColor: textOnPrimary,
         centerTitle: true,
         elevation: 0,
-        shadowColor: primaryGreen.withOpacity(0.3),
+        shadowColor: primaryGreen.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
         titleTextStyle: GoogleFonts.inter(
           fontSize: 20,
           fontWeight: FontWeight.w600,
@@ -148,7 +148,7 @@ class AppTheme {
           backgroundColor: primaryGreen,
           foregroundColor: textOnPrimary,
           elevation: 2,
-          shadowColor: primaryGreen.withOpacity(0.3),
+          shadowColor: primaryGreen.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
           padding: const EdgeInsets.symmetric(
             horizontal: 24,
             vertical: 16,
@@ -227,7 +227,8 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: cardColor,
         elevation: 4,
-        shadowColor: Colors.black.withOpacity(0.1),
+        shadowColor: Colors.black// ignore: deprecated_member_use
+                  .withOpacity(0.1),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
@@ -269,9 +270,11 @@ class AppTheme {
         space: 1,
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: primaryGreen.withOpacity(0.1),
+        backgroundColor: primaryGreen// ignore: deprecated_member_use
+                  .withOpacity(0.1),
         selectedColor: primaryGreen,
-        disabledColor: textHint.withOpacity(0.1),
+        disabledColor: textHint// ignore: deprecated_member_use
+                  .withOpacity(0.1),
         labelStyle: GoogleFonts.inter(
           fontSize: 12,
           fontWeight: FontWeight.w500,
@@ -348,7 +351,8 @@ class AppStyles {
   // Тени для карточек
   static List<BoxShadow> get cardShadow => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.1),
+          color: Colors.black// ignore: deprecated_member_use
+                  .withOpacity(0.1),
           blurRadius: 10,
           offset: const Offset(0, 4),
         ),
@@ -357,7 +361,7 @@ class AppStyles {
   // Тени для кнопок
   static List<BoxShadow> get buttonShadow => [
         BoxShadow(
-          color: AppTheme.primaryGreen.withOpacity(0.3),
+          color: AppTheme.primaryGreen.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
           blurRadius: 8,
           offset: const Offset(0, 2),
         ),

@@ -206,7 +206,7 @@ class _LoginScreenState extends State<LoginScreen>
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.primaryGreen.withOpacity(0.3),
+                  color: AppTheme.primaryGreen.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
                   blurRadius: 15,
                   offset: const Offset(0, 8),
                 ),
@@ -354,7 +354,7 @@ class _LoginScreenState extends State<LoginScreen>
                     backgroundColor: AppTheme.primaryGreen,
                     foregroundColor: Colors.white,
                     elevation: 4,
-                    shadowColor: AppTheme.primaryGreen.withOpacity(0.3),
+                    shadowColor: AppTheme.primaryGreen.withValues(red: &.red, green: &.green, blue: &.blue, alpha: 77),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -408,10 +408,12 @@ class _LoginScreenState extends State<LoginScreen>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.primaryGreen.withOpacity(0.05),
+        color: AppTheme.primaryGreen// ignore: deprecated_member_use
+                  .withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppTheme.primaryGreen.withOpacity(0.1),
+          color: AppTheme.primaryGreen// ignore: deprecated_member_use
+                  .withOpacity(0.1),
           width: 1,
         ),
       ),
@@ -423,7 +425,8 @@ class _LoginScreenState extends State<LoginScreen>
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withOpacity(0.1),
+                  color: AppTheme.primaryGreen// ignore: deprecated_member_use
+                  .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(

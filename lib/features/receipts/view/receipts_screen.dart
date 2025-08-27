@@ -145,7 +145,8 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen.withOpacity(0.1),
+                  color: AppTheme.primaryGreen// ignore: deprecated_member_use
+                  .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -245,7 +246,8 @@ class _ReceiptScreenState extends State<ReceiptScreen>
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: AppTheme.primaryGreen.withOpacity(0.1),
+              color: AppTheme.primaryGreen// ignore: deprecated_member_use
+                  .withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
@@ -345,7 +347,8 @@ class _ReceiptScreenState extends State<ReceiptScreen>
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: AppTheme.primaryGreen.withOpacity(0.1),
+              color: AppTheme.primaryGreen// ignore: deprecated_member_use
+                  .withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -411,7 +414,8 @@ class _ReceiptScreenState extends State<ReceiptScreen>
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: AppTheme.primaryGreen.withOpacity(0.1),
+              color: AppTheme.primaryGreen// ignore: deprecated_member_use
+                  .withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(
@@ -598,7 +602,8 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                             ),
                             decoration: BoxDecoration(
                               color:
-                                  AppTheme.primaryGreen.withOpacity(0.1),
+                                  AppTheme.primaryGreen// ignore: deprecated_member_use
+                  .withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
