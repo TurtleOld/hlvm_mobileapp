@@ -503,12 +503,12 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.errorRed// ignore: deprecated_member_use
-                  .withOpacity(0.1),
+                  color: AppTheme.errorRed // ignore: deprecated_member_use
+                      .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: AppTheme.errorRed // ignore: deprecated_member_use
-                  .withOpacity(0.3),
+                        .withOpacity(0.3),
                     width: 1,
                   ),
                 ),
@@ -701,8 +701,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                       width: 120,
                       height: 120,
                       decoration: BoxDecoration(
-                        color: Colors.white// ignore: deprecated_member_use
-                  .withOpacity(0.2),
+                        color: Colors.white // ignore: deprecated_member_use
+                            .withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -833,8 +833,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black// ignore: deprecated_member_use
-                  .withOpacity(0.1),
+                    color: Colors.black // ignore: deprecated_member_use
+                        .withOpacity(0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -877,8 +877,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black// ignore: deprecated_member_use
-                  .withOpacity(0.1),
+                    color: Colors.black // ignore: deprecated_member_use
+                        .withOpacity(0.1),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -930,8 +930,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black// ignore: deprecated_member_use
-                  .withOpacity(0.1),
+            color: Colors.black // ignore: deprecated_member_use
+                .withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -944,7 +944,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: Colors.white// ignore: deprecated_member_use
+              color: Colors.white // ignore: deprecated_member_use
                   .withOpacity(0.2),
               shape: BoxShape.circle,
             ),
@@ -1017,7 +1017,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         boxShadow: [
           BoxShadow(
             color: AppTheme.primaryGreen // ignore: deprecated_member_use
-                  .withOpacity(0.3),
+                .withOpacity(0.3),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1036,8 +1036,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: Colors.white// ignore: deprecated_member_use
-                  .withOpacity(0.2),
+                    color: Colors.white // ignore: deprecated_member_use
+                        .withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -1092,8 +1092,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black// ignore: deprecated_member_use
-                  .withOpacity(0.1),
+            color: Colors.black // ignore: deprecated_member_use
+                .withOpacity(0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1109,8 +1109,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryGreen// ignore: deprecated_member_use
-                  .withOpacity(0.1),
+                  color: AppTheme.primaryGreen // ignore: deprecated_member_use
+                      .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -1181,8 +1181,8 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         color: AppTheme.surfaceColor,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppTheme.primaryGreen// ignore: deprecated_member_use
-                  .withOpacity(0.2),
+          color: AppTheme.primaryGreen // ignore: deprecated_member_use
+              .withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -1224,14 +1224,14 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
   }
 }
 
-/// Тестирует разные подходы к предобработке изображения для лучшего распознавания
+/// Обрабатывает изображение чека с использованием модели GPT-4o
 Future<Map<String, dynamic>> testDifferentPreprocessing(
     String imagePath) async {
-  print('DEBUG: === STARTING DIFFERENT PREPROCESSING APPROACHES ===');
+  print('DEBUG: === STARTING RECEIPT PROCESSING WITH GPT-4o ===');
 
   try {
-    // Пробуем сначала с GPT-4o (более стабильная модель)
-    print('DEBUG: Trying with GPT-4o model');
+    // Используем только GPT-4o модель
+    print('DEBUG: Processing with GPT-4o model');
     Map<String, dynamic> result =
         await _processWithModelInternal(imagePath, "openai/gpt-4o");
 
@@ -1240,18 +1240,8 @@ Future<Map<String, dynamic>> testDifferentPreprocessing(
       return result;
     }
 
-    // Если GPT-4o не сработал, пробуем Llama модель
-    print('DEBUG: GPT-4o failed, trying Llama model');
-    result = await _processWithModelInternal(
-        imagePath, "meta/Llama-3.2-90B-Vision-Instruct");
-
-    if (!result.containsKey('Error')) {
-      print('DEBUG: Success with Llama model');
-      return result;
-    }
-
-    // Если и Llama не сработал, пробуем еще раз с GPT-4o с более простым промптом
-    print('DEBUG: Llama failed, trying GPT-4o with simplified prompt');
+    // Если основная обработка не сработала, пробуем с упрощенным промптом
+    print('DEBUG: GPT-4o failed, trying with simplified prompt');
     result =
         await _processWithModelInternalSimplified(imagePath, "openai/gpt-4o");
 
@@ -1260,8 +1250,8 @@ Future<Map<String, dynamic>> testDifferentPreprocessing(
       return result;
     }
 
-    // Если и это не сработал, возвращаем ошибку
-    print('DEBUG: All models failed');
+    // Если и это не сработало, возвращаем ошибку
+    print('DEBUG: GPT-4o processing failed');
     return result;
   } catch (e) {
     print('DEBUG: Exception in testDifferentPreprocessing: $e');
@@ -1394,12 +1384,11 @@ Future<Map<String, dynamic>> _processWithModelInternal(
       print('DEBUG: Response status code: ${response.statusCode}');
       print('DEBUG: Response data: ${response.data}');
 
-      // Если ошибка с GPT-4o, пробуем Llama модель
+      // Если ошибка с GPT-4o, возвращаем ошибку
       if (modelName == "openai/gpt-4o" &&
           (response.statusCode == 500 || response.statusCode == 503)) {
-        print('DEBUG: Server error with GPT-4o, trying Llama model');
-        return await _processWithModelInternal(
-            imageData, "meta/Llama-3.2-90B-Vision-Instruct");
+        print('DEBUG: Server error with GPT-4o');
+        return {'Error': 'Ошибка сервера GitHub AI API. Попробуйте позже.'};
       }
 
       if (response.statusCode == 401) {
