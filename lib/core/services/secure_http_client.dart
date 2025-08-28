@@ -513,17 +513,6 @@ class SecureHttpClient {
     }
   }
 
-  Future<void> _updateSessionActivity() async {
-    try {
-      final now = DateTime.now();
-      await _secureStorage.write(
-        key: 'session_last_activity',
-        value: now.toIso8601String(),
-      );
-    } catch (e) {
-      _logger.error('Ошибка обновления активности сессии: $e');
-    }
-  }
 
   Future<bool> checkConnection() async {
     try {

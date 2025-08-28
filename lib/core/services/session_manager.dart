@@ -122,7 +122,7 @@ class SessionManager {
             'Отсутствует время создания сессии');
       }
 
-      final createdAt = DateTime.parse(createdString);
+      DateTime.parse(createdString);
       final now = DateTime.now();
 
       if (await _authService.shouldRefreshToken()) {

@@ -462,53 +462,6 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                     ),
                   );
                 }
-
-                void _showDeleteConfirmationDialog(
-                    BuildContext context, int receiptId) {
-                  showDialog(
-                    context: context,
-                    builder: (BuildContext context) {
-                      return AlertDialog(
-                        title: const Row(
-                          children: [
-                            Icon(
-                              Icons.warning_amber_rounded,
-                              color: Colors.red,
-                              size: 24,
-                            ),
-                            SizedBox(width: 8),
-                            Text('Удалить чек?'),
-                          ],
-                        ),
-                        content: const Text(
-                          'Вы уверены, что хотите удалить этот чек? Это действие нельзя отменить.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                            child: const Text('Отмена'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              // Отправляем событие удаления в BLoC
-                              context
-                                  .read<ReceiptBloc>()
-                                  .add(DeleteReceipt(receiptId: receiptId));
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                            ),
-                            child: const Text('Удалить'),
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                }
 }
             },
             icon: const Icon(Icons.add_a_photo),
