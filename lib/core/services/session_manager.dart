@@ -7,19 +7,11 @@ import 'package:hlvm_mobileapp/services/authentication.dart';
 import 'package:hlvm_mobileapp/core/utils/error_handler.dart';
 import 'package:talker/talker.dart';
 
-/// Сервис управления сессиями с защитой от Session Fixation атак
-///
-/// Защита от Session Fixation реализуется через:
-/// 1. Принудительную регенерацию session ID при каждом входе
-/// 2. Валидацию целостности сессионных данных
-/// 3. Мониторинг подозрительной активности
-/// 4. Автоматическое завершение сессий при обнаружении угроз
 class SessionManager {
   final AuthService _authService;
   final FlutterSecureStorage _secureStorage;
   final Talker _logger;
 
-  // Ключи для безопасного хранения
   static const String _sessionIdKey = 'session_id';
   static const String _sessionCreatedKey = 'session_created';
   static const String _sessionLastActivityKey = 'session_last_activity';
@@ -28,11 +20,10 @@ class SessionManager {
   static const String _suspiciousActivityKey = 'suspicious_activity';
   static const String _loginAttemptsKey = 'login_attempts';
 
-  // Константы безопасности
   static const Duration _sessionTimeout =
-      Duration(hours: 1); // Соответствует времени жизни access токена
+      Duration(hours: 1);
   static const Duration _inactivityTimeout =
-      Duration(minutes: 30); // Уменьшаем время неактивности
+      Duration(minutes: 30);
   static const int _maxLoginAttempts = 5;
   static const Duration _lockoutDuration = Duration(minutes: 30);
 
@@ -47,13 +38,10 @@ class SessionManager {
         _secureStorage = secureStorage ?? const FlutterSecureStorage(),
         _logger = logger ?? Talker();
 
-  /// Инициализация менеджера сессий
   Future<void> initialize() async {
     try {
-      // Запускаем мониторинг сессий
       _startSessionMonitoring();
 
-      // Инициализируем контроллер событий
       _sessionEventController = StreamController<SessionEvent>.broadcast();
 
       _logger.info('SessionManager инициализирован');
@@ -63,12 +51,6 @@ class SessionManager {
     }
   }
 
-  /// Создание новой безопасной сессии после аутентификации
-  ///
-  /// Этот метод является ключевым для защиты от Session Fixation:
-  /// - Генерирует новый уникальный session ID
-  /// - Создает fingerprint устройства
-  /// - Устанавливает временные метки
   Future<SessionInfo> createSecureSession({
     required String username,
     required Map<String, dynamic> userData,
@@ -78,21 +60,16 @@ class SessionManager {
       _logger
           .info('Создание новой безопасной сессии для пользователя: $username');
 
-      // 1. Очищаем только сессионные данные, но сохраняем device fingerprint
       await _clearSessionData();
 
-      // 2. Генерируем новый уникальный session ID
       final sessionId = await _generateSecureSessionId();
 
-      // 3. Создаем fingerprint устройства
       final deviceFingerprint = await _generateDeviceFingerprint();
 
-      // 4. Устанавливаем временные метки
       final now = DateTime.now();
       final sessionTimeout = customTimeout ?? _sessionTimeout;
       final sessionExpiry = now.add(sessionTimeout);
 
-      // 5. Сохраняем информацию о сессии
       await _secureStorage.write(key: _sessionIdKey, value: sessionId);
       await _secureStorage.write(
           key: _sessionCreatedKey, value: now.toIso8601String());
@@ -102,10 +79,8 @@ class SessionManager {
           key: _deviceFingerprintKey, value: deviceFingerprint);
       await _secureStorage.write(key: _sessionVersionKey, value: '1.0');
 
-      // 6. Сбрасываем счетчики попыток входа
       await _resetLoginAttempts();
 
-      // 7. Уведомляем о создании сессии
       _notifySessionEvent(SessionEvent.sessionCreated(sessionId, username));
 
       final sessionInfo = SessionInfo(
@@ -125,17 +100,8 @@ class SessionManager {
     }
   }
 
-  /// Валидация текущей сессии
-  ///
-  /// Проверяет:
-  /// - Существование session ID
-  /// - Время жизни сессии
-  /// - Активность пользователя
-  /// - Целостность данных
-  /// - Подозрительную активность
   Future<SessionValidationResult> validateCurrentSession() async {
     try {
-      // Сначала проверяем наличие токенов авторизации
       final accessToken = await _secureStorage.read(key: 'access_token');
       final refreshToken = await _secureStorage.read(key: 'refresh_token');
       final isLoggedIn = await _secureStorage.read(key: 'isLoggedIn');
@@ -150,7 +116,6 @@ class SessionManager {
         return SessionValidationResult.invalid('Сессия не найдена');
       }
 
-      // Проверяем время создания сессии
       final createdString = await _secureStorage.read(key: _sessionCreatedKey);
       if (createdString == null) {
         return SessionValidationResult.invalid(
@@ -160,30 +125,25 @@ class SessionManager {
       final createdAt = DateTime.parse(createdString);
       final now = DateTime.now();
 
-      // Проверяем, нужно ли обновить токен
       if (await _authService.shouldRefreshToken()) {
         try {
           await _authService.refreshToken();
-          // Если токен обновлен успешно, обновляем время создания сессии
           await _secureStorage.write(
               key: _sessionCreatedKey, value: now.toIso8601String());
           _logger.info('Токен успешно обновлен, сессия продлена');
         } catch (e) {
           _logger.warning('Не удалось обновить токен: $e');
-          // Проверяем, есть ли refresh token
           final refreshToken = await _secureStorage.read(key: 'refresh_token');
           if (refreshToken == null) {
             await _invalidateSession('Refresh token отсутствует');
             return SessionValidationResult.expired('Refresh token отсутствует');
           }
 
-          // Если refresh token есть, но обновление не удалось, возможно он истек
           await _invalidateSession('Refresh token истек');
           return SessionValidationResult.expired('Refresh token истек');
         }
       }
 
-      // Проверяем неактивность
       final lastActivityString =
           await _secureStorage.read(key: _sessionLastActivityKey);
       if (lastActivityString != null) {
@@ -195,14 +155,12 @@ class SessionManager {
         }
       }
 
-      // Проверяем fingerprint устройства (более мягкая проверка)
       final storedFingerprint =
           await _secureStorage.read(key: _deviceFingerprintKey);
       
       if (storedFingerprint != null) {
         final currentFingerprint = await _generateDeviceFingerprint();
         
-        // Только если fingerprint сильно отличается, считаем это подозрительным
         if (storedFingerprint != currentFingerprint &&
             !_isSimilarFingerprint(storedFingerprint, currentFingerprint)) {
           await _invalidateSession('Обнаружено изменение устройства');
@@ -211,14 +169,12 @@ class SessionManager {
         }
       }
 
-      // Проверяем подозрительную активность
       if (await _hasSuspiciousActivity()) {
         await _invalidateSession('Обнаружена подозрительная активность');
         return SessionValidationResult.suspicious(
             'Обнаружена подозрительная активность');
       }
 
-      // Обновляем время последней активности
       await _updateLastActivity();
 
       return SessionValidationResult.valid(sessionId);
@@ -228,10 +184,6 @@ class SessionManager {
     }
   }
 
-  /// Обновление сессии (refresh)
-  ///
-  /// Создает новую сессию с тем же пользователем,
-  /// но с новым session ID для защиты от Session Fixation
   Future<SessionInfo?> refreshSession() async {
     try {
       final currentSession = await validateCurrentSession();
@@ -239,14 +191,12 @@ class SessionManager {
         return null;
       }
 
-      // Получаем данные пользователя
       final username = await _authService.getCurrentUsername();
       if (username == null) {
         await _invalidateSession('Не удалось получить имя пользователя');
         return null;
       }
 
-      // Создаем новую сессию
       final newSession =
           await createSecureSession(username: username, userData: {});
 
@@ -258,7 +208,6 @@ class SessionManager {
     }
   }
 
-  /// Принудительное завершение сессии
   Future<void> forceLogout({
     required String reason,
     bool notifyUser = true,
@@ -276,7 +225,6 @@ class SessionManager {
     }
   }
 
-  /// Выход из аккаунта с UI уведомлением
   Future<void> logoutWithUI(BuildContext context) async {
     try {
       await _authService.logout();
@@ -291,12 +239,10 @@ class SessionManager {
       _notifySessionEvent(SessionEvent.userLogout());
     } catch (e) {
       _logger.error('Ошибка выхода из аккаунта: $e');
-      // Fallback: прямая очистка сессии и токенов
       await _invalidateSession('Ошибка выхода из аккаунта');
     }
   }
 
-  /// Выход из аккаунта при истечении сессии
   Future<void> logoutOnSessionExpired(BuildContext context) async {
     try {
       await _authService.logout();
@@ -309,7 +255,6 @@ class SessionManager {
       _notifySessionEvent(SessionEvent.sessionExpired());
     } catch (e) {
       _logger.error('Ошибка выхода при истечении сессии: $e');
-      // Fallback: прямая очистка сессии и токенов
       await _invalidateSession('Ошибка выхода при истечении сессии');
 
       if (context.mounted) {
@@ -318,7 +263,6 @@ class SessionManager {
     }
   }
 
-  /// Проверка аутентификации с UI обработкой
   Future<bool> checkAuthenticationWithUI(BuildContext context) async {
     try {
       final validation = await validateCurrentSession();
@@ -337,7 +281,6 @@ class SessionManager {
     }
   }
 
-  /// Регистрация попытки входа
   Future<void> recordLoginAttempt({
     required String username,
     required bool success,
@@ -348,10 +291,8 @@ class SessionManager {
       final attempts = await _getLoginAttempts();
 
       if (success) {
-        // Сбрасываем счетчик при успешном входе
         await _resetLoginAttempts();
       } else {
-        // Увеличиваем счетчик при неудачном входе
         attempts.add(LoginAttempt(
           username: username,
           timestamp: DateTime.now(),
@@ -360,7 +301,6 @@ class SessionManager {
           success: false,
         ));
 
-        // Проверяем, не превышен ли лимит попыток
         if (attempts.length >= _maxLoginAttempts) {
           await _lockAccount(username);
         }
@@ -372,7 +312,6 @@ class SessionManager {
     }
   }
 
-  /// Получение информации о текущей сессии
   Future<SessionInfo?> getCurrentSessionInfo() async {
     try {
       final sessionId = await _secureStorage.read(key: _sessionIdKey);
@@ -407,28 +346,21 @@ class SessionManager {
     }
   }
 
-  /// Получение потока событий сессии
   Stream<SessionEvent> get sessionEvents {
     return _sessionEventController?.stream ?? const Stream.empty();
   }
 
-  // Приватные методы
-
-  /// Генерация безопасного session ID
   Future<String> _generateSecureSessionId() async {
     final random = Random.secure();
     final bytes = List<int>.generate(32, (i) => random.nextInt(256));
     final sessionId = base64Url.encode(bytes);
 
-    // Добавляем временную метку для дополнительной уникальности
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     return '${sessionId}_$timestamp';
   }
 
-  /// Генерация fingerprint устройства
   Future<String> _generateDeviceFingerprint() async {
     try {
-      // Сначала пытаемся получить существующий fingerprint
       final existingFingerprint =
           await _secureStorage.read(key: 'device_fingerprint_stable');
 
@@ -436,28 +368,21 @@ class SessionManager {
         return existingFingerprint;
       }
 
-      // Если fingerprint не существует, создаем стабильный fingerprint
-      // Используем комбинацию доступных характеристик устройства
       final deviceInfo = await _getDeviceInfo();
       final fingerprint = _createStableFingerprint(deviceInfo);
 
-      // Сохраняем стабильный fingerprint
       await _secureStorage.write(
           key: 'device_fingerprint_stable', value: fingerprint);
 
       return fingerprint;
     } catch (e) {
       _logger.error('Ошибка генерации device fingerprint: $e');
-      // Fallback: возвращаем стабильный fingerprint на основе времени
       return 'device_${DateTime.now().millisecondsSinceEpoch ~/ (24 * 60 * 60 * 1000)}';
     }
   }
 
-  /// Получение информации об устройстве
   Future<Map<String, String>> _getDeviceInfo() async {
     try {
-      // В реальном приложении здесь можно использовать device_info_plus
-      // для получения реальных характеристик устройства
       return {
         'platform': 'flutter',
         'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
@@ -467,22 +392,18 @@ class SessionManager {
     }
   }
 
-  /// Создание стабильного fingerprint
   String _createStableFingerprint(Map<String, String> deviceInfo) {
     final values = deviceInfo.values.join('|');
     final hash = values.hashCode.toString();
     return 'device_${hash}_${DateTime.now().millisecondsSinceEpoch ~/ (24 * 60 * 60 * 1000)}';
   }
 
-  /// Проверка схожести fingerprint'ов
   bool _isSimilarFingerprint(String stored, String current) {
     try {
-      // Если fingerprint'ы содержат одинаковые базовые части, считаем их схожими
       final storedParts = stored.split('_');
       final currentParts = current.split('_');
 
       if (storedParts.length >= 2 && currentParts.length >= 2) {
-        // Сравниваем базовую часть (device + hash)
         final storedBase = storedParts.take(2).join('_');
         final currentBase = currentParts.take(2).join('_');
 
@@ -495,14 +416,12 @@ class SessionManager {
     }
   }
 
-  /// Очистка сессионных данных (сохраняет device fingerprint)
   Future<void> _clearSessionData() async {
     try {
       await _secureStorage.delete(key: _sessionIdKey);
       await _secureStorage.delete(key: _sessionCreatedKey);
       await _secureStorage.delete(key: _sessionLastActivityKey);
       await _secureStorage.delete(key: _sessionVersionKey);
-      // НЕ удаляем device fingerprint, чтобы он оставался стабильным
 
       _logger.info('Сессионные данные очищены');
     } catch (e) {
@@ -510,7 +429,6 @@ class SessionManager {
     }
   }
 
-  /// Аннулирование существующих сессий
   Future<void> _invalidateExistingSessions() async {
     try {
       await _secureStorage.delete(key: _sessionIdKey);
@@ -525,14 +443,12 @@ class SessionManager {
     }
   }
 
-  /// Аннулирование текущей сессии
   Future<void> _invalidateSession(String reason) async {
     try {
       final sessionId = await _secureStorage.read(key: _sessionIdKey);
 
       await _invalidateExistingSessions();
       
-      // Также очищаем токены авторизации
       await _secureStorage.delete(key: 'access_token');
       await _secureStorage.delete(key: 'refresh_token');
       await _secureStorage.delete(key: 'isLoggedIn');
@@ -547,7 +463,6 @@ class SessionManager {
     }
   }
 
-  /// Обновление времени последней активности
   Future<void> _updateLastActivity() async {
     try {
       final now = DateTime.now();
@@ -558,7 +473,6 @@ class SessionManager {
     }
   }
 
-  /// Проверка подозрительной активности
   Future<bool> _hasSuspiciousActivity() async {
     try {
       final suspiciousData =
@@ -569,7 +483,6 @@ class SessionManager {
     }
   }
 
-  /// Получение попыток входа
   Future<List<LoginAttempt>> _getLoginAttempts() async {
     try {
       final attemptsData = await _secureStorage.read(key: _loginAttemptsKey);
@@ -582,7 +495,6 @@ class SessionManager {
     }
   }
 
-  /// Сохранение попыток входа
   Future<void> _saveLoginAttempts(List<LoginAttempt> attempts) async {
     try {
       final attemptsData = jsonEncode(attempts.map((e) => e.toJson()).toList());
@@ -592,7 +504,6 @@ class SessionManager {
     }
   }
 
-  /// Сброс счетчика попыток входа
   Future<void> _resetLoginAttempts() async {
     try {
       await _secureStorage.delete(key: _loginAttemptsKey);
@@ -601,7 +512,6 @@ class SessionManager {
     }
   }
 
-  /// Блокировка аккаунта
   Future<void> _lockAccount(String username) async {
     try {
       final lockoutUntil = DateTime.now().add(_lockoutDuration);
@@ -618,7 +528,6 @@ class SessionManager {
     }
   }
 
-  /// Запуск мониторинга сессий
   void _startSessionMonitoring() {
     _sessionMonitorTimer =
         Timer.periodic(const Duration(minutes: 2), (timer) async {
@@ -635,19 +544,16 @@ class SessionManager {
     });
   }
 
-  /// Уведомление о событиях сессии
   void _notifySessionEvent(SessionEvent event) {
     _sessionEventController?.add(event);
   }
 
-  /// Освобождение ресурсов
   void dispose() {
     _sessionMonitorTimer?.cancel();
     _sessionEventController?.close();
   }
 }
 
-/// Информация о сессии
 class SessionInfo {
   final String sessionId;
   final String username;
@@ -681,7 +587,6 @@ class SessionInfo {
   }
 }
 
-/// Результат валидации сессии
 class SessionValidationResult {
   final bool isValid;
   final String? sessionId;
@@ -728,7 +633,6 @@ class SessionValidationResult {
   }
 }
 
-/// Попытка входа
 class LoginAttempt {
   final String username;
   final DateTime timestamp;
@@ -765,7 +669,6 @@ class LoginAttempt {
   }
 }
 
-/// События сессии
 abstract class SessionEvent {
   final DateTime timestamp;
 

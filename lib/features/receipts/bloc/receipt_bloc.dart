@@ -4,6 +4,7 @@ import '../../../services/api.dart';
 import '../../../core/bloc/talker_bloc.dart';
 import '../../../core/utils/global_error_handler.dart';
 import '../../../core/services/cache_service.dart';
+import '../../../core/services/receipt_storage_service.dart';
 import 'receipt_event.dart';
 import 'receipt_state.dart';
 
@@ -11,6 +12,7 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
   final ApiService _apiService;
   final TalkerBloc _talkerBloc;
   final CacheService _cacheService;
+  final ReceiptStorageService _receiptStorageService;
 
   ReceiptBloc({
     required ApiService apiService,
@@ -19,6 +21,7 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
   })  : _apiService = apiService,
         _talkerBloc = talkerBloc,
         _cacheService = cacheService,
+        _receiptStorageService = ReceiptStorageService(),
         super(ReceiptInitial()) {
     on<LoadReceipts>(_onLoadReceipts, transformer: droppable());
     on<RefreshReceipts>(_onRefreshReceipts, transformer: droppable());
@@ -27,6 +30,7 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
     on<UploadReceiptFromImage>(_onUploadReceiptFromImage,
         transformer: droppable());
     on<GetSellerInfo>(_onGetSellerInfo, transformer: droppable());
+    on<DeleteReceipt>(_onDeleteReceipt, transformer: droppable());
   }
 
   Future<void> _onLoadReceipts(
@@ -107,16 +111,23 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
 
     try {
       final result = await _apiService.createReceipt(event.jsonData);
-      if (result.contains('успешно')) {
-        _talkerBloc.add(ShowSuccessEvent(message: result));
-        emit(ReceiptUploadSuccess(message: result));
-      } else if (result.contains('авторизации')) {
+      
+      if (result['success'] == true) {
+        // Сохраняем ID чека локально, если он есть
+        final receiptId = result['receipt_id'];
+        if (receiptId != null) {
+          await _receiptStorageService.saveReceiptId(receiptId, event.jsonData);
+        }
+
+        _talkerBloc.add(ShowSuccessEvent(message: result['message']));
+        emit(ReceiptUploadSuccess(message: result['message']));
+      } else if (result['message'].contains('авторизации')) {
         // Для ошибок авторизации показываем предупреждение, а не ошибку
-        _talkerBloc.add(ShowWarningEvent(message: result));
-        emit(ReceiptError(message: result));
+        _talkerBloc.add(ShowWarningEvent(message: result['message']));
+        emit(ReceiptError(message: result['message']));
       } else {
-        _talkerBloc.add(ShowErrorEvent(message: result));
-        emit(ReceiptUploadSuccess(message: result));
+        _talkerBloc.add(ShowErrorEvent(message: result['message']));
+        emit(ReceiptError(message: result['message']));
       }
     } catch (e) {
       final errorMessage = GlobalErrorHandler.handleBlocError(e);
@@ -203,6 +214,47 @@ class ReceiptBloc extends Bloc<ReceiptEvent, ReceiptState> {
       } else {
         _talkerBloc.add(ShowErrorEvent(
           message: 'Ошибка получения информации о продавце: $errorMessage',
+          error: e,
+        ));
+        emit(ReceiptError(message: errorMessage));
+      }
+    }
+  }
+
+  Future<void> _onDeleteReceipt(
+    DeleteReceipt event,
+    Emitter<ReceiptState> emit,
+  ) async {
+    emit(ReceiptLoading());
+
+    try {
+      final result = await _apiService.deleteReceipt(event.receiptId);
+
+      if (result['success'] == true) {
+        // Удаляем ID чека из локального хранилища
+        await _receiptStorageService.removeReceiptId(event.receiptId);
+
+        _talkerBloc.add(ShowSuccessEvent(message: result['message']));
+        emit(ReceiptDeleteSuccess(message: result['message']));
+
+        // Обновляем список чеков после удаления
+        add(RefreshReceipts());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(message: result['message']));
+        emit(ReceiptError(message: result['message']));
+      }
+    } catch (e) {
+      final errorMessage = GlobalErrorHandler.handleBlocError(e);
+
+      if (GlobalErrorHandler.isSessionExpiredError(e)) {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Сессия истекла. Пожалуйста, войдите снова.',
+          error: e,
+        ));
+        emit(ReceiptSessionExpired());
+      } else {
+        _talkerBloc.add(ShowErrorEvent(
+          message: 'Ошибка удаления чека: $errorMessage',
           error: e,
         ));
         emit(ReceiptError(message: errorMessage));

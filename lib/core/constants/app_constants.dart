@@ -33,6 +33,11 @@ class AppConstants {
   static const String unknownError = 'Неизвестная ошибка';
   static const String sessionExpiredAction = 'Войти снова';
 
+  // Rate Limit Error Messages
+  static const String rateLimitExceeded = 'Превышен лимит запросов';
+  static const String rateLimitWaitMessage =
+      'Пожалуйста, подождите перед повторной попыткой';
+
   // UI Constants
   static const double defaultPadding = 16.0;
   static const double defaultSpacing = 8.0;

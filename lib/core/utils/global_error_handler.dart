@@ -66,6 +66,11 @@ class GlobalErrorHandler {
       if (error.type == DioExceptionType.connectionError) {
         return 'Ошибка подключения к серверу';
       }
+
+      // Обработка rate limit ошибок
+      if (error.response?.statusCode == 429) {
+        return ErrorHandler.handleRateLimitError(error.response?.data);
+      }
     }
 
     // Проверяем на ошибки сессии в тексте ошибки

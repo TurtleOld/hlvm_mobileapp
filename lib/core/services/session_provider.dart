@@ -23,7 +23,6 @@ class SessionProvider extends InheritedWidget {
     return result?.sessionManager;
   }
 
-  /// Безопасный доступ к SessionManager с fallback
   static SessionManager? safeOf(BuildContext context) {
     try {
       return maybeOf(context);
@@ -32,7 +31,6 @@ class SessionProvider extends InheritedWidget {
     }
   }
 
-  /// Проверка доступности SessionProvider в контексте
   static bool hasSessionProvider(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<SessionProvider>() !=
         null;

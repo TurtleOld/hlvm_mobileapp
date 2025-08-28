@@ -99,7 +99,6 @@ class CacheService {
     }
   }
 
-  /// Получает кешированную информацию о продавце
   Future<Map<String, dynamic>?> getCachedSellerInfo(int sellerId) async {
     try {
       final cacheKey = '${_sellersCacheKey}_$sellerId';
@@ -127,7 +126,6 @@ class CacheService {
     }
   }
 
-  /// Очищает весь кеш
   Future<void> clearAllCache() async {
     try {
       await _cacheManager.emptyCache();
@@ -137,7 +135,6 @@ class CacheService {
     }
   }
 
-  /// Получает размер кеша в байтах
   Future<int> getCacheSize() async {
     try {
       final cacheDir = await getTemporaryDirectory();
@@ -168,7 +165,6 @@ class CacheService {
     }
   }
 
-  /// Очищает старый кеш при превышении лимита
   Future<void> _cleanupOldCache() async {
     try {
       final currentSize = await getCacheSize();
@@ -178,18 +174,15 @@ class CacheService {
         _talker.log(
             'Cache size ($currentSize bytes) exceeds limit ($maxSizeBytes bytes). Cleaning up...');
 
-        // Получаем все файлы кеша с их метаданными
         final cacheDir = await getTemporaryDirectory();
         final cachePath = cacheDir.path;
 
         final files = <File>[];
         await _collectCacheFiles(Directory(cachePath), files);
 
-        // Сортируем по времени последнего доступа (старые сначала)
         files.sort(
             (a, b) => a.lastAccessedSync().compareTo(b.lastAccessedSync()));
 
-        // Удаляем старые файлы до достижения лимита
         int deletedSize = 0;
         for (final file in files) {
           if (currentSize - deletedSize <= maxSizeBytes) break;
@@ -223,7 +216,6 @@ class CacheService {
     }
   }
 
-  /// Проверяет, есть ли кешированные данные
   Future<bool> hasCachedReceipts() async {
     try {
       final fileInfo = await _cacheManager.getFileFromCache(_receiptsCacheKey);
@@ -243,7 +235,6 @@ class CacheService {
     }
   }
 
-  /// Получает информацию о кеше
   Future<Map<String, dynamic>> getCacheInfo() async {
     try {
       final size = await getCacheSize();

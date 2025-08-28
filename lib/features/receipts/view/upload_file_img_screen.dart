@@ -390,9 +390,9 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
         print('DEBUG: API response: $result');
 
         if (mounted) {
-          if (result.contains('успешно') || result.contains('добавлен')) {
+          if (result['success'] == true) {
             ScaffoldMessenger.of(currentContext).showSnackBar(
-              SnackBar(content: Text(result)),
+              SnackBar(content: Text(result['message'])),
             );
             await Future.delayed(const Duration(milliseconds: 500));
             Navigator.of(currentContext).pushAndRemoveUntil(
@@ -404,7 +404,7 @@ class _ImageCaptureScreenState extends State<ImageCaptureScreen>
             // Показываем ошибку от сервера
             ScaffoldMessenger.of(currentContext).showSnackBar(
               SnackBar(
-                content: Text('Ошибка загрузки чека: $result'),
+                content: Text('Ошибка загрузки чека: ${result['message']}'),
                 backgroundColor: Colors.red,
               ),
             );
@@ -1235,23 +1235,7 @@ Future<Map<String, dynamic>> testDifferentPreprocessing(
     Map<String, dynamic> result =
         await _processWithModelInternal(imagePath, "openai/gpt-4o");
 
-    if (!result.containsKey('Error')) {
-      print('DEBUG: Success with GPT-4o model');
-      return result;
-    }
-
-    // Если основная обработка не сработала, пробуем с упрощенным промптом
-    print('DEBUG: GPT-4o failed, trying with simplified prompt');
-    result =
-        await _processWithModelInternalSimplified(imagePath, "openai/gpt-4o");
-
-    if (!result.containsKey('Error')) {
-      print('DEBUG: Success with GPT-4o simplified prompt');
-      return result;
-    }
-
-    // Если и это не сработало, возвращаем ошибку
-    print('DEBUG: GPT-4o processing failed');
+    print('DEBUG: GPT-4o processing completed');
     return result;
   } catch (e) {
     print('DEBUG: Exception in testDifferentPreprocessing: $e');
@@ -1378,28 +1362,58 @@ Future<Map<String, dynamic>> _processWithModelInternal(
     print('DEBUG: Response data type: ${response.data.runtimeType}');
     print(
         'DEBUG: Response data keys: ${response.data is Map ? response.data.keys.toList() : 'Not a Map'}');
+    
+    // Дополнительное логирование для отладки структуры ответа
+    if (response.data is Map) {
+      final responseData = response.data as Map;
+      print('DEBUG: Response data entries:');
+      responseData.forEach((key, value) {
+        print('DEBUG:   $key: $value (${value.runtimeType})');
+      });
+    }
 
     if (response.statusCode != 200) {
       print('DEBUG: Response status code: ${response.statusCode}');
       print('DEBUG: Response data: ${response.data}');
 
-      // Если ошибка с GPT-4o, возвращаем ошибку
-      if (modelName == "openai/gpt-4o" &&
-          (response.statusCode == 500 || response.statusCode == 503)) {
-        print('DEBUG: Server error with GPT-4o');
-        return {'Error': 'Ошибка сервера GitHub AI API. Попробуйте позже.'};
+      // Извлекаем текст ошибки из ответа
+      String errorMessage = 'Ошибка GitHub AI API: ${response.statusCode}';
+
+      if (response.data != null && response.data is Map) {
+        final responseData = response.data as Map;
+
+        // Пытаемся извлечь сообщение об ошибке из различных возможных полей
+        if (responseData.containsKey('message')) {
+          errorMessage = responseData['message'].toString();
+        } else if (responseData.containsKey('error')) {
+          errorMessage = responseData['error'].toString();
+        } else if (responseData.containsKey('detail')) {
+          errorMessage = responseData['detail'].toString();
+        } else if (responseData.containsKey('description')) {
+          errorMessage = responseData['description'].toString();
+        }
+
+        print('DEBUG: Extracted error message: $errorMessage');
       }
 
+      // Обрабатываем специфические ошибки
+      if (response.statusCode == 429) {
+        print('DEBUG: 429 Too Many Requests - Rate limit exceeded');
+        return {'Error': _handleGitHubRateLimitError(response.data)};
+      }
+      
       if (response.statusCode == 401) {
         print('DEBUG: 401 Unauthorized - Token might be invalid or expired');
         return {'Error': 'Ошибка авторизации GitHub API. Проверьте токен.'};
       }
+      
       if (response.statusCode == 404) {
         print('DEBUG: 404 Not Found - Endpoint might be incorrect');
         return {
           'Error': 'GitHub AI API недоступен. Обратитесь к администратору.'
         };
       }
+      
       if (response.statusCode == 403) {
         print(
             'DEBUG: 403 Forbidden - Token might not have required permissions');
@@ -1407,6 +1421,7 @@ Future<Map<String, dynamic>> _processWithModelInternal(
           'Error': 'Токен не имеет необходимых прав доступа к GitHub AI API.'
         };
       }
+      
       if (response.statusCode == 400) {
         print('DEBUG: 400 Bad Request - Request structure might be incorrect');
         print('DEBUG: Response data: ${response.data}');
@@ -1415,7 +1430,13 @@ Future<Map<String, dynamic>> _processWithModelInternal(
               'Неправильная структура запроса к GitHub AI API. Проверьте формат данных.'
         };
       }
-      return {'Error': 'Ошибка GitHub AI API: ${response.statusCode}'};
+      
+      if (response.statusCode == 500 || response.statusCode == 503) {
+        print('DEBUG: Server error with GPT-4o');
+        return {'Error': 'Ошибка сервера GitHub AI API. Попробуйте позже.'};
+      }
+
+      return {'Error': errorMessage};
     }
 
     // Обрабатываем ответ от GitHub AI API
@@ -1952,189 +1973,78 @@ Future<Map<String, dynamic>> _processWithModelInternal(
       print('DEBUG: DioException request headers: ${e.requestOptions.headers}');
       print('DEBUG: DioException request data: ${e.requestOptions.data}');
 
+      // Извлекаем текст ошибки из ответа DioException
+      String errorMessage = 'Ошибка GitHub AI API: ${e.message}';
+
+      if (e.response?.data != null && e.response!.data is Map) {
+        final responseData = e.response!.data as Map;
+
+        // Пытаемся извлечь сообщение об ошибке из различных возможных полей
+        if (responseData.containsKey('message')) {
+          errorMessage = responseData['message'].toString();
+        } else if (responseData.containsKey('error')) {
+          errorMessage = responseData['error'].toString();
+        } else if (responseData.containsKey('detail')) {
+          errorMessage = responseData['detail'].toString();
+        } else if (responseData.containsKey('description')) {
+          errorMessage = responseData['description'].toString();
+        }
+
+        print(
+            'DEBUG: Extracted error message from DioException: $errorMessage');
+      }
+
+      // Обрабатываем специфические ошибки
+      if (e.response?.statusCode == 429) {
+        print('DEBUG: 429 Too Many Requests - Rate limit exceeded');
+        return {'Error': _handleGitHubRateLimitError(e.response?.data)};
+      }
+      
       if (e.response?.statusCode == 401) {
         print('DEBUG: 401 Unauthorized - Token might be invalid or expired');
         return {'Error': 'Ошибка авторизации GitHub API. Проверьте токен.'};
       }
+      
       if (e.response?.statusCode == 404) {
         print('DEBUG: 404 Not Found - Endpoint might be incorrect');
         return {
           'Error': 'GitHub AI API недоступен. Обратитесь к администратору.'
         };
       }
+      
+      if (e.response?.statusCode == 403) {
+        print(
+            'DEBUG: 403 Forbidden - Token might not have required permissions');
+        return {
+          'Error': 'Токен не имеет необходимых прав доступа к GitHub AI API.'
+        };
+      }
+      
+      if (e.response?.statusCode == 400) {
+        print('DEBUG: 400 Bad Request - Request structure might be incorrect');
+        return {
+          'Error':
+              'Неправильная структура запроса к GitHub AI API. Проверьте формат данных.'
+        };
+      }
+      
       if (e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
           e.type == DioExceptionType.sendTimeout) {
         return {'Error': 'Таймаут соединения с GitHub AI API'};
       }
+      
       if (e.type == DioExceptionType.connectionError) {
         return {'Error': 'Ошибка подключения к GitHub AI API'};
       }
-      return {'Error': 'Ошибка GitHub AI API: ${e.message}'};
+      
+      return {'Error': errorMessage};
     }
     return {'Error': 'Ошибка при обработке: $e'};
   }
 }
 
-/// Упрощенная версия обработки с более простым промптом
-Future<Map<String, dynamic>> _processWithModelInternalSimplified(
-    String imageData, String modelName) async {
-  try {
-    // Определяем, является ли imageData путем к файлу или base64 строкой
-    bool isBase64Data = imageData.startsWith('data:image/');
-    print('DEBUG: Simplified processing - isBase64Data: $isBase64Data');
-    print('DEBUG: Using model: $modelName');
 
-    // Создаем запрос к GitHub AI API для обработки изображения
-    final apiService = ApiService();
-
-    // Подготавливаем base64 изображение для отправки
-    String base64Image;
-    if (isBase64Data) {
-      final parts = imageData.split(',');
-      base64Image = parts[1];
-    } else {
-      // Если это путь к файлу, читаем и кодируем в base64
-      final file = File(imageData);
-      if (!await file.exists()) {
-        print('DEBUG: Image file does not exist: $imageData');
-        return {'Error': 'Файл изображения не найден'};
-      }
-
-      try {
-        final bytes = await file.readAsBytes();
-        if (bytes.isEmpty) {
-          print('DEBUG: Image file is empty: $imageData');
-          return {'Error': 'Файл изображения пуст'};
-        }
-        base64Image = base64Encode(bytes);
-        print(
-            'DEBUG: Successfully encoded image to base64, size: ${bytes.length} bytes');
-      } catch (e) {
-        print('DEBUG: Error reading image file: $e');
-        return {'Error': 'Ошибка чтения файла изображения: $e'};
-      }
-    }
-
-    // Упрощенный промпт для лучшего распознавания
-    final requestBody = {
-      "model": modelName,
-      "messages": [
-        {
-          "role": "system",
-          "content":
-              "Вы — помощник по распознаванию кассовых чеков. Извлеките все данные с чека в JSON формате. Всё должно быть точно как в чеке.\n\nСТРУКТУРА: {\"name_seller\":\"название магазина\",\"retail_place_address\":\"адрес\",\"retail_place\":\"место\",\"items\":[{\"product_name\":\"название товара\",\"category\":\"категория\",\"quantity\":количество,\"amount\":сумма,\"price\":цена за единицу}],\"total_sum\":общая сумма,\"receipt_date\":\"дата\",\"number_receipt\":номер чека,\"nds10\":НДС 10%,\"nds20\":НДС 20%,\"operation_type\":1}\n\nКРИТИЧЕСКИ ВАЖНО:\n- quantity: из колонки 'КОЛ-ВО', сохраняйте ВСЕ знаки после запятой (0.182, 0.648)\n- amount: из колонки 'СУММА, ₽', сохраняйте ВСЕ знаки после запятой (7.28, 64.79)\n- price = amount ÷ quantity, округлить до 3 знаков\n- Не округляйте quantity и amount!\n- Названия товаров точно как в чеке\n- Ответ только JSON, без текста"
-        },
-        {
-          "role": "user",
-          "content": [
-            {
-              "type": "text",
-              "text":
-                  "Извлеките все данные с чека в JSON формате. Внимательно различайте количество и сумму. СОХРАНЯЙТЕ ВСЕ ЗНАКИ ПОСЛЕ ЗАПЯТОЙ - не округляйте и не обрезайте десятичные знаки."
-            },
-            {
-              "type": "image_url",
-              "image_url": {
-                "url": "data:image/jpeg;base64,$base64Image",
-                "detail": "high"
-              }
-            }
-          ]
-        }
-      ],
-      "temperature": 0.1,
-      "max_tokens": 4096
-    };
-
-    // Отправляем запрос к GitHub AI API
-    print('DEBUG: Sending simplified request to GitHub AI API');
-    Response response = await apiService.postToGithubAI(
-      AppConstants.receiptsParseImageEndpoint,
-      requestBody,
-    );
-
-    if (response.statusCode != 200) {
-      return {'Error': 'Ошибка GitHub AI API: ${response.statusCode}'};
-    }
-
-    // Обрабатываем ответ
-    final responseData = response.data;
-    if (responseData == null ||
-        responseData['choices'] == null ||
-        responseData['choices'].isEmpty) {
-      return {'Error': 'Неверный ответ от GitHub AI API'};
-    }
-
-    final content = responseData['choices'][0]['message']['content'];
-    if (content == null) {
-      return {'Error': 'Пустой ответ от GitHub AI API'};
-    }
-
-    // Извлекаем JSON из ответа
-    String jsonString = content.trim();
-
-    // Убираем markdown код блоки
-    if (jsonString.startsWith('```json')) {
-      jsonString = jsonString.substring(7);
-    } else if (jsonString.startsWith('```')) {
-      jsonString = jsonString.substring(3);
-    }
-    if (jsonString.endsWith('```')) {
-      jsonString = jsonString.substring(0, jsonString.length - 3);
-    }
-
-    // Парсим JSON
-    Map<String, dynamic> result;
-    try {
-      result = jsonDecode(jsonString);
-    } catch (e) {
-      return {'Error': 'Ошибка парсинга JSON от AI модели'};
-    }
-
-    // Применяем ту же логику валидации и исправления
-    if (result.containsKey('receipt_date')) {
-      result['receipt_date'] =
-          convertToIsoDate(result['receipt_date']?.toString());
-    }
-
-    // Проверяем и исправляем цены
-    if (result['items'] != null && result['items'] is List) {
-      for (var item in result['items']) {
-        if (item is Map) {
-          double quantity = _safeParseDouble(item['quantity'] ?? 0);
-          double amount = _safeParseDouble(item['amount'] ?? 0);
-
-          if (quantity > 0 && amount > 0) {
-            double calculatedPrice = amount / quantity;
-            item['price'] = double.parse(calculatedPrice.toStringAsFixed(3));
-          }
-        }
-      }
-    }
-
-    // Формируем результат
-    final finalResult = {
-      'name_seller': result['name_seller']?.toString() ?? '',
-      'retail_place_address': result['retail_place_address']?.toString() ?? '',
-      'retail_place': result['retail_place']?.toString() ?? '',
-      'items': result['items'] ?? [],
-      'total_sum': _safeParseDouble(result['total_sum']),
-      'receipt_date': result['receipt_date']?.toString(),
-      'number_receipt': _safeParseInt(result['number_receipt']),
-      'nds10': _safeParseDouble(result['nds10']),
-      'nds20': _safeParseDouble(result['nds20']),
-      'operation_type': _safeParseInt(result['operation_type']) == 0
-          ? 1
-          : _safeParseInt(result['operation_type']),
-    };
-
-    return finalResult;
-  } catch (e) {
-    print('DEBUG: Exception in simplified processing: $e');
-    return {'Error': 'Ошибка упрощенной обработки: $e'};
-  }
-}
 
 /// Конвертирует дату в ISO формат
 String convertToIsoDate(String? dateString) {
@@ -2226,4 +2136,43 @@ String _generateFallbackProductName(
   baseName += ' №$itemNumber';
 
   return baseName;
+}
+
+/// Обрабатывает ошибки rate limit для GitHub AI API
+String _handleGitHubRateLimitError(dynamic responseData) {
+  String rateLimitMessage =
+      'Превышен лимит запросов к GitHub AI API. Попробуйте позже.';
+
+  if (responseData is Map<String, dynamic>) {
+    // Проверяем структуру ошибки: {'error': {'code': 'RateLimitReached', 'message': '...', 'details': '...'}}
+    if (responseData.containsKey('error') && responseData['error'] is Map) {
+      final errorData = responseData['error'] as Map;
+
+      if (errorData['code'] == 'RateLimitReached') {
+        final message = errorData['message']?.toString() ?? '';
+
+        // Извлекаем время ожидания из сообщения
+        final waitTimeMatch =
+            RegExp(r'Please wait (\d+) seconds').firstMatch(message);
+        if (waitTimeMatch != null) {
+          final waitSeconds = int.tryParse(waitTimeMatch.group(1) ?? '0') ?? 0;
+          final waitMinutes = (waitSeconds / 60).ceil();
+
+          if (waitMinutes > 0) {
+            rateLimitMessage =
+                'Превышен лимит запросов к GitHub AI API. Пожалуйста, подождите ${waitMinutes} минут перед повторной попыткой.';
+          } else {
+            rateLimitMessage =
+                'Превышен лимит запросов к GitHub AI API. Пожалуйста, подождите ${waitSeconds} секунд перед повторной попыткой.';
+          }
+        } else {
+          // Если не удалось извлечь время, добавляем оригинальное сообщение
+          rateLimitMessage =
+              'Превышен лимит запросов к GitHub AI API. $message';
+        }
+      }
+    }
+  }
+
+  return rateLimitMessage;
 }

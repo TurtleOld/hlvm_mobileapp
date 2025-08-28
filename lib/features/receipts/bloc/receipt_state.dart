@@ -48,3 +48,12 @@ class ReceiptError extends ReceiptState {
   @override
   List<Object?> get props => [message];
 }
+
+class ReceiptDeleteSuccess extends ReceiptState {
+  final String message;
+
+  const ReceiptDeleteSuccess({required this.message});
+
+  @override
+  List<Object?> get props => [message];
+}

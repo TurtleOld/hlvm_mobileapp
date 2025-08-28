@@ -16,7 +16,6 @@ class ServerSettingsService {
 
   ServerSettingsService();
 
-  /// Сохраняет адрес сервера
   Future<void> setServerAddress(String address) async {
     try {
       String cleanAddress = address.trim();
@@ -24,7 +23,6 @@ class ServerSettingsService {
         cleanAddress = cleanAddress.substring(0, cleanAddress.length - 1);
       }
 
-      // Проверяем корректность адреса перед сохранением
       if (cleanAddress.isEmpty ||
           cleanAddress.length < 3 ||
           cleanAddress.length > 100 ||
@@ -49,14 +47,11 @@ class ServerSettingsService {
     }
   }
 
-  /// Получает адрес сервера
   Future<String?> getServerAddress() async {
     try {
       final address = await _secureStorage.read(key: _serverAddressKey);
 
-      // Проверяем корректность адреса
       if (address != null && address.isNotEmpty) {
-        // Проверяем, что это не случайный код
         if (address.length > 50 ||
             address.contains(' ') ||
             address.contains('\n') ||
@@ -66,7 +61,6 @@ class ServerSettingsService {
           return null;
         }
 
-        // Проверяем, что это похоже на URL или IP адрес
         if (!_isValidServerAddress(address)) {
           AppLogger.warning(
               'Server address does not match expected format: $address');
@@ -85,9 +79,7 @@ class ServerSettingsService {
     }
   }
 
-  /// Проверяет корректность адреса сервера
   bool _isValidServerAddress(String address) {
-    // Проверяем, что адрес не содержит подозрительные символы
     if (address.contains('0DhwISORbzhVjurLYbxio6Xd') ||
         address.length < 3 ||
         address.length > 100 ||
@@ -97,21 +89,18 @@ class ServerSettingsService {
       return false;
     }
 
-    // Проверяем, что это похоже на домен, IP или localhost
     final validPatterns = [
-      RegExp(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'), // домен
-      RegExp(r'^(\d{1,3}\.){3}\d{1,3}$'), // IP адрес
-      RegExp(r'^localhost$'), // localhost
-      RegExp(r'^[a-zA-Z0-9.-]+$'), // короткий домен
+      RegExp(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'),
+      RegExp(r'^(\d{1,3}\.){3}\d{1,3}$'),
+      RegExp(r'^localhost$'),
+      RegExp(r'^[a-zA-Z0-9.-]+$'),
     ];
 
     return validPatterns.any((pattern) => pattern.hasMatch(address));
   }
 
-  /// Сохраняет порт сервера
   Future<void> setServerPort(int port) async {
     try {
-      // Проверяем корректность порта
       if (port < 1 || port > 65535) {
         throw Exception(
             'Некорректный порт. Порт должен быть в диапазоне 1-65535');
@@ -130,7 +119,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Получает порт сервера
   Future<int?> getServerPort() async {
     try {
       final portString = await _secureStorage.read(key: _serverPortKey);
@@ -145,12 +133,10 @@ class ServerSettingsService {
     }
   }
 
-  /// Сохраняет протокол сервера
   Future<void> setServerProtocol(String protocol) async {
     try {
       final cleanProtocol = protocol.toLowerCase().trim();
 
-      // Проверяем, что протокол корректен
       if (cleanProtocol.isEmpty ||
           (cleanProtocol != 'http' && cleanProtocol != 'https')) {
         throw Exception(
@@ -170,13 +156,11 @@ class ServerSettingsService {
     }
   }
 
-  /// Получает протокол сервера
   Future<String?> getServerProtocol() async {
     try {
       final protocol = await _secureStorage.read(key: _serverProtocolKey);
       AppLogger.info('Server protocol retrieved: $protocol');
 
-      // Если протокол не установлен, устанавливаем 'https' по умолчанию
       if (protocol == null) {
         await setServerProtocol('https');
         AppLogger.info('Default protocol (https) set');
@@ -186,14 +170,12 @@ class ServerSettingsService {
       return protocol;
     } catch (e) {
       AppLogger.error('Error retrieving server protocol: $e');
-      return 'https'; // Возвращаем 'https' как значение по умолчанию
+      return 'https';
     }
   }
 
-  /// Сохраняет таймаут соединения
   Future<void> setTimeout(int timeoutSeconds) async {
     try {
-      // Проверяем корректность таймаута
       if (timeoutSeconds < 1 ||
           timeoutSeconds > 300) {
         throw Exception(
@@ -213,7 +195,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Получает таймаут соединения
   Future<int?> getTimeout() async {
     try {
       final timeoutString = await _secureStorage.read(key: _timeoutKey);
@@ -228,10 +209,8 @@ class ServerSettingsService {
     }
   }
 
-  /// Сохраняет максимальное количество попыток
   Future<void> setMaxRetries(int attempts) async {
     try {
-      // Проверяем корректность количества попыток
       if (attempts < 1 || attempts > 10) {
         throw Exception(
             'Некорректное количество попыток. Должно быть в диапазоне 1-10');
@@ -250,7 +229,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Получает максимальное количество попыток
   Future<int?> getMaxRetries() async {
     try {
       final attemptsString = await _secureStorage.read(key: _maxRetriesKey);
@@ -265,10 +243,8 @@ class ServerSettingsService {
     }
   }
 
-  /// Сохраняет настройку проверки здоровья сервера
   Future<void> setHealthCheckEnabled(bool enabled) async {
     try {
-      // Проверяем корректность значения
       await _secureStorage.write(
         key: _healthCheckKey,
         value: enabled.toString(),
@@ -282,7 +258,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Получает настройку проверки здоровья сервера
   Future<bool?> getHealthCheckEnabled() async {
     try {
       final healthCheckString = await _secureStorage.read(key: _healthCheckKey);
@@ -297,12 +272,10 @@ class ServerSettingsService {
     }
   }
 
-  /// Сохраняет версию сервера
   Future<void> setServerVersion(String version) async {
     try {
       final cleanVersion = version.trim();
 
-      // Проверяем корректность версии
       if (cleanVersion.isEmpty ||
           cleanVersion.length > 50 ||
           cleanVersion.contains(' ') ||
@@ -324,7 +297,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Получает версию сервера
   Future<String?> getServerVersion() async {
     try {
       final version = await _secureStorage.read(key: _serverVersionKey);
@@ -336,7 +308,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Очищает все настройки сервера
   Future<void> clearAllSettings() async {
     try {
       await _secureStorage.delete(key: _serverAddressKey);
@@ -355,7 +326,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Очищает некорректные настройки сервера
   Future<void> clearInvalidSettings() async {
     try {
       final address = await getServerAddress();
@@ -364,7 +334,6 @@ class ServerSettingsService {
         await _secureStorage.delete(key: _serverAddressKey);
       }
 
-      // Проверяем другие настройки
       final port = await getServerPort();
       if (port != null && (port < 1 || port > 65535)) {
         AppLogger.warning('Clearing invalid server port: $port');
@@ -395,7 +364,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Проверяет корректность всех настроек
   Future<bool> validateAllSettings() async {
     try {
       final address = await getServerAddress();
@@ -430,7 +398,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Получает сообщение о состоянии настроек сервера
   Future<String> getConfigurationStatusMessage() async {
     try {
       final address = await getServerAddress();
@@ -457,7 +424,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Получает полный URL сервера
   Future<String?> getFullServerUrl() async {
     try {
       final protocol = await getServerProtocol() ?? 'https';
@@ -471,10 +437,8 @@ class ServerSettingsService {
         url += ':$port';
       }
 
-      // Проверяем корректность сформированного URL
       if (url.length > 200 || url.contains(' ') || url.contains('\n')) {
         AppLogger.warning('Invalid server URL format: $url');
-        // Не вызываем clearInvalidSettings здесь, чтобы избежать рекурсии
         return null;
       }
 
@@ -486,7 +450,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Проверяет, изменились ли настройки
   Future<bool> hasSettingsChanged() async {
     try {
       final currentSettings = await _getCurrentSettingsAsJson();
@@ -499,7 +462,6 @@ class ServerSettingsService {
     }
   }
 
-  /// Обновляет хеш настроек
   Future<void> _updateSettingsHash() async {
     try {
       final settingsJson = await _getCurrentSettingsAsJson();
@@ -514,14 +476,11 @@ class ServerSettingsService {
     }
   }
 
-  /// Получает текущие настройки в формате JSON
   Future<String> _getCurrentSettingsAsJson() async {
     final address = await getServerAddress();
 
-    // Проверяем корректность адреса перед сохранением
     if (address != null && !_isValidServerAddress(address)) {
       AppLogger.warning('Invalid address detected in settings: $address');
-      // Не вызываем clearInvalidSettings здесь, чтобы избежать рекурсии
     }
 
     final settings = {

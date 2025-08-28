@@ -7,7 +7,6 @@ import 'package:hlvm_mobileapp/core/constants/app_constants.dart';
 
 import 'package:talker/talker.dart';
 
-/// Безопасный HTTP клиент
 class SecureHttpClient {
   final http.Client _httpClient;
   final FlutterSecureStorage _secureStorage;
@@ -33,17 +32,14 @@ class SecureHttpClient {
         _serverSettings = serverSettings ?? ServerSettingsService(),
         _logger = logger ?? Talker();
 
-  /// Проверка, настроен ли сервер
   Future<bool> isServerConfigured() async {
     try {
       final serverAddress = await _serverSettings.getServerAddress();
 
-      // Проверяем, что адрес не пустой и корректный
       if (serverAddress == null || serverAddress.isEmpty) {
         return false;
       }
 
-      // Дополнительная проверка на корректность адреса
       if (serverAddress.length > 100 ||
           serverAddress.contains(' ') ||
           serverAddress.contains('\n') ||
@@ -60,7 +56,6 @@ class SecureHttpClient {
     }
   }
 
-  /// Получает базовый URL сервера из настроек
   Future<String?> getServerBaseUrl() async {
     try {
       if (_baseUrl != null) {
@@ -69,18 +64,15 @@ class SecureHttpClient {
 
       final url = await _serverSettings.getFullServerUrl();
 
-      // Проверяем корректность полученного URL
       if (url != null &&
           (url.length > 200 || url.contains(' ') || url.contains('\n'))) {
         _logger.warning('Invalid server URL format: $url');
         return null;
       }
 
-      // Добавляем /api к базовому URL, если его нет
       if (url != null) {
         String baseUrl = url;
         if (baseUrl.endsWith('/api/')) {
-          // Убираем trailing slash для единообразия
           baseUrl = baseUrl.substring(0, baseUrl.length - 1);
         } else if (!baseUrl.endsWith('/api')) {
           baseUrl = baseUrl.endsWith('/') ? '${baseUrl}api' : '$baseUrl/api';
@@ -95,7 +87,6 @@ class SecureHttpClient {
     }
   }
 
-  /// Проверяет доступность сервера
   Future<bool> checkServerAvailability() async {
     try {
       final serverUrl = await getServerBaseUrl();
@@ -114,7 +105,6 @@ class SecureHttpClient {
     }
   }
 
-  /// Сбрасывает некорректные настройки сервера
   Future<void> resetInvalidServerSettings() async {
     try {
       await _serverSettings.clearInvalidSettings();
@@ -124,7 +114,6 @@ class SecureHttpClient {
     }
   }
 
-  /// Получает сообщение о состоянии настроек сервера
   Future<String> getConfigurationStatusMessage() async {
     try {
       final isConfigured = await isServerConfigured();
@@ -202,7 +191,6 @@ class SecureHttpClient {
     );
   }
 
-  /// Выполнение PATCH запроса с защитой сессии
   Future<http.Response> patch(
     String endpoint, {
     Map<String, String>? headers,
@@ -227,11 +215,8 @@ class SecureHttpClient {
   }) async {
     int retryCount = 0;
 
-    // Проверка настройки сервера теперь выполняется в _buildUrl
-
     while (retryCount < _maxRetries) {
       try {
-        // Проверяем наличие токенов
         final accessToken = await _secureStorage.read(key: 'access_token');
         if (accessToken == null) {
           _logger.warning('Access token не найден');
@@ -254,12 +239,10 @@ class SecureHttpClient {
 
         await _handleResponse(response, endpoint);
 
-
         return response;
       } catch (e) {
         retryCount++;
 
-        // Если это ошибка о не настроенном сервере, не повторяем попытки
         if (e.toString().contains(AppConstants.serverAddressRequired) ||
             e.toString().contains('Некорректный адрес сервера') ||
             e.toString().contains('Необходимо указать адрес сервера')) {
@@ -279,7 +262,6 @@ class SecureHttpClient {
           _logger
               .error('Превышено количество попыток для $method $endpoint: $e');
 
-          // Возвращаем более информативное сообщение об ошибке
           if (e.toString().contains(AppConstants.serverAddressRequired) ||
               e.toString().contains('Некорректный адрес сервера') ||
               e.toString().contains('Необходимо указать адрес сервера')) {
@@ -292,11 +274,9 @@ class SecureHttpClient {
         _logger.warning(
             'Попытка $retryCount для $method $endpoint не удалась: $e');
 
-        // Если это ошибка настройки сервера, не ждем перед следующей попыткой
         if (e.toString().contains(AppConstants.serverAddressRequired) ||
             e.toString().contains('Некорректный адрес сервера') ||
             e.toString().contains('Необходимо указать адрес сервера')) {
-          // Не ждем, сразу переходим к следующей попытке
         } else {
           await Future.delayed(_retryDelay * retryCount);
         }
@@ -316,15 +296,11 @@ class SecureHttpClient {
       ...?headers,
     };
 
-
-
-    // Добавляем access token
     final accessToken = await _secureStorage.read(key: 'access_token');
     if (accessToken != null) {
       secureHeaders['Authorization'] = 'Bearer $accessToken';
     }
 
-    // Добавляем временную метку для предотвращения replay атак
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     secureHeaders['X-Request-Timestamp'] = timestamp.toString();
 
@@ -335,15 +311,14 @@ class SecureHttpClient {
       String endpoint, Map<String, dynamic>? queryParameters) async {
     final serverUrl = await getServerBaseUrl();
     if (serverUrl == null) {
-      return null; // Возвращаем null вместо исключения
+      return null;
     }
 
-    // Дополнительная проверка на корректность URL
     if (serverUrl.length > 200 ||
         serverUrl.contains(' ') ||
         serverUrl.contains('\n')) {
       _logger.warning('Invalid server URL detected');
-      return null; // Возвращаем null вместо исключения
+      return null;
     }
 
     final uri = Uri.parse('$serverUrl$endpoint');
@@ -420,30 +395,25 @@ class SecureHttpClient {
         }
       }
 
-      // Очищаем токены при ошибке аутентификации
       await _secureStorage.delete(key: 'access_token');
       await _secureStorage.delete(key: 'refresh_token');
       await _secureStorage.delete(key: 'isLoggedIn');
     } catch (e) {
       _logger.error('Ошибка обработки 401 ответа: $e');
-      // Очищаем токены при ошибке обработки
       await _secureStorage.delete(key: 'access_token');
       await _secureStorage.delete(key: 'refresh_token');
       await _secureStorage.delete(key: 'isLoggedIn');
     }
   }
 
-  /// Обработка 403 ответа
   Future<void> _handleForbiddenResponse(http.Response response) async {
     _logger.warning('Получен 403 ответ - доступ запрещен');
 
     try {
-      // Проверяем, не связана ли ошибка с сессией
       final responseBody = jsonDecode(response.body) as Map<String, dynamic>?;
       final errorCode = responseBody?['error_code'] as String?;
 
       if (errorCode == 'SESSION_EXPIRED' || errorCode == 'INVALID_SESSION') {
-        // Очищаем токены при отклонении сессии
         await _secureStorage.delete(key: 'access_token');
         await _secureStorage.delete(key: 'refresh_token');
         await _secureStorage.delete(key: 'isLoggedIn');
@@ -460,17 +430,14 @@ class SecureHttpClient {
     _logger.error('Ошибка сервера ${response.statusCode}: ${response.body}');
 
     if (response.statusCode >= 500) {
-      // Очищаем токены при критической ошибке сервера
       await _secureStorage.delete(key: 'access_token');
       await _secureStorage.delete(key: 'refresh_token');
       await _secureStorage.delete(key: 'isLoggedIn');
     }
   }
 
-  /// Валидация ответа сервера
   Future<void> _validateResponse(http.Response response) async {
     try {
-      // Базовая валидация ответа
       if (response.statusCode >= 400) {
         throw Exception('HTTP Error: ${response.statusCode}');
       }
@@ -558,7 +525,6 @@ class SecureHttpClient {
     }
   }
 
-  /// Проверка соединения с сервером
   Future<bool> checkConnection() async {
     try {
       final serverAddress = await _serverSettings.getServerAddress();

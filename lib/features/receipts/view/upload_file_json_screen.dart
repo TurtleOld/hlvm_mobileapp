@@ -73,15 +73,24 @@ class _FileReaderScreenState extends State<FileReaderScreen> {
         try {
           final result = await _apiService.createReceipt(data);
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(result)),
-            );
-            await Future.delayed(const Duration(milliseconds: 500));
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(
-                  builder: (context) => const HomePage(selectedIndex: 1)),
-              (route) => false,
-            );
+            if (result['success'] == true) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(result['message'])),
+              );
+              await Future.delayed(const Duration(milliseconds: 500));
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(
+                    builder: (context) => const HomePage(selectedIndex: 1)),
+                (route) => false,
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Ошибка: ${result['message']}'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
           }
         } catch (e) {
           final errorMsg = e.toString();

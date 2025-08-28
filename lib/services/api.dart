@@ -23,6 +23,12 @@ class ApiService {
     dio.options.connectTimeout = const Duration(seconds: 60);
     dio.options.receiveTimeout = const Duration(seconds: 120);
     dio.options.sendTimeout = const Duration(seconds: 60);
+    
+    // Настраиваем validateStatus чтобы не выбрасывать исключения для 4xx ошибок
+    dio.options.validateStatus = (status) {
+      return status != null && status < 500; // Принимаем все статусы меньше 500
+    };
+    
     return dio;
   }
 
@@ -238,7 +244,8 @@ class ApiService {
     }
   }
 
-  Future<String> createReceipt(Map<String, dynamic> jsonData) async {
+  Future<Map<String, dynamic>> createReceipt(
+      Map<String, dynamic> jsonData) async {
     try {
       print('DEBUG: createReceipt called with data: ${jsonData.keys.toList()}');
       print('DEBUG: Full JSON data: $jsonData');
@@ -262,7 +269,11 @@ class ApiService {
       final baseUrl = await _baseUrl;
       if (baseUrl == null) {
         print('DEBUG: Server URL is null');
-        return "Необходимо указать адрес сервера в настройках";
+        return {
+          'success': false,
+          'message': "Необходимо указать адрес сервера в настройках",
+          'receipt_id': null,
+        };
       }
 
       print('DEBUG: Using base URL: $baseUrl');
@@ -290,46 +301,192 @@ class ApiService {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('DEBUG: Receipt created successfully');
-        return 'Чек успешно добавлен!';
+        
+        // Извлекаем ID чека из ответа сервера
+        int? receiptId;
+        if (response.data is Map) {
+          receiptId = response.data['id'] ?? response.data['receipt_id'];
+        }
+
+        return {
+          'success': true,
+          'message': 'Чек успешно добавлен!',
+          'receipt_id': receiptId,
+        };
       } else {
         print(
             'DEBUG: Receipt creation failed with status: ${response.statusCode}');
+        String errorMessage = 'Чек не был добавлен, повторите попытку!';
         if (response.data != null) {
           if (response.data is Map && response.data['detail'] != null) {
-            return response.data['detail'].toString();
+            errorMessage = response.data['detail'].toString();
+          } else {
+            errorMessage = response.data.toString();
           }
-          return response.data.toString();
         }
-        return 'Чек не был добавлен, повторите попытку!';
+        return {
+          'success': false,
+          'message': errorMessage,
+          'receipt_id': null,
+        };
       }
     } catch (e) {
       print('DEBUG: Exception in createReceipt: $e');
       if (e is DioException) {
         // Обработка ошибок авторизации
         if (e.response?.statusCode == 401) {
-          return 'Ошибка авторизации. Попробуйте войти заново.';
+          return {
+            'success': false,
+            'message': 'Ошибка авторизации. Попробуйте войти заново.',
+            'receipt_id': null,
+          };
         }
 
         if (e.response?.data != null) {
           final data = e.response?.data;
+          String errorMessage;
           if (data is Map && data['detail'] != null) {
-            return data['detail'].toString();
+            errorMessage = data['detail'].toString();
+          } else {
+            errorMessage = data.toString();
           }
-          return data.toString();
+          return {
+            'success': false,
+            'message': errorMessage,
+            'receipt_id': null,
+          };
         }
 
         // Обработка сетевых ошибок
         if (e.type == DioExceptionType.connectionTimeout ||
             e.type == DioExceptionType.receiveTimeout ||
             e.type == DioExceptionType.sendTimeout) {
-          return 'Ошибка подключения к серверу. Проверьте интернет-соединение.';
+          return {
+            'success': false,
+            'message':
+                'Ошибка подключения к серверу. Проверьте интернет-соединение.',
+            'receipt_id': null,
+          };
         }
 
         if (e.type == DioExceptionType.connectionError) {
-          return 'Не удалось подключиться к серверу. Проверьте адрес сервера.';
+          return {
+            'success': false,
+            'message':
+                'Не удалось подключиться к серверу. Проверьте адрес сервера.',
+            'receipt_id': null,
+          };
         }
       }
-      return 'Ошибка: $e';
+      return {
+        'success': false,
+        'message': 'Ошибка: $e',
+        'receipt_id': null,
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> deleteReceipt(int receiptId) async {
+    try {
+      final baseUrl = await _baseUrl;
+      if (baseUrl == null) {
+        return {
+          'success': false,
+          'message': "Необходимо указать адрес сервера в настройках",
+        };
+      }
+
+      final timeout = await _serverSettings.getTimeout() ?? 120;
+      final retryAttempts = await _serverSettings.getMaxRetries() ?? 3;
+
+      print(
+          'DEBUG: Making DELETE request to: $baseUrl/receipts/delete/$receiptId');
+      final response = await _makeRequestWithRetry(
+        () => _dio.delete(
+          '$baseUrl/receipts/delete/$receiptId',
+          options: Options(
+            sendTimeout: Duration(seconds: timeout),
+            receiveTimeout: Duration(seconds: timeout),
+          ),
+        ),
+        retryAttempts,
+      );
+
+      print('DEBUG: Delete response status code: ${response.statusCode}');
+      print('DEBUG: Delete response data: ${response.data}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        return {
+          'success': true,
+          'message': 'Чек успешно удален!',
+        };
+      } else {
+        String errorMessage = 'Не удалось удалить чек';
+        if (response.data != null) {
+          if (response.data is Map && response.data['detail'] != null) {
+            errorMessage = response.data['detail'].toString();
+          } else {
+            errorMessage = response.data.toString();
+          }
+        }
+        return {
+          'success': false,
+          'message': errorMessage,
+        };
+      }
+    } catch (e) {
+      print('DEBUG: Exception in deleteReceipt: $e');
+      if (e is DioException) {
+        if (e.response?.statusCode == 401) {
+          return {
+            'success': false,
+            'message': 'Ошибка авторизации. Попробуйте войти заново.',
+          };
+        }
+
+        if (e.response?.statusCode == 404) {
+          return {
+            'success': false,
+            'message': 'Чек не найден',
+          };
+        }
+
+        if (e.response?.data != null) {
+          final data = e.response?.data;
+          String errorMessage;
+          if (data is Map && data['detail'] != null) {
+            errorMessage = data['detail'].toString();
+          } else {
+            errorMessage = data.toString();
+          }
+          return {
+            'success': false,
+            'message': errorMessage,
+          };
+        }
+
+        if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout) {
+          return {
+            'success': false,
+            'message':
+                'Ошибка подключения к серверу. Проверьте интернет-соединение.',
+          };
+        }
+
+        if (e.type == DioExceptionType.connectionError) {
+          return {
+            'success': false,
+            'message':
+                'Не удалось подключиться к серверу. Проверьте адрес сервера.',
+          };
+        }
+      }
+      return {
+        'success': false,
+        'message': 'Ошибка: $e',
+      };
     }
   }
 

@@ -5,6 +5,9 @@ import 'package:hlvm_mobileapp/services/api.dart';
 import 'package:intl/intl.dart';
 import 'package:hlvm_mobileapp/features/auth/view/settings_screen.dart';
 import 'package:hlvm_mobileapp/core/theme/app_theme.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hlvm_mobileapp/features/receipts/bloc/receipt_bloc.dart';
+import 'package:hlvm_mobileapp/features/receipts/bloc/receipt_event.dart';
 
 class ReceiptScreen extends StatefulWidget {
   const ReceiptScreen({super.key});
@@ -459,7 +462,54 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                     ),
                   );
                 }
-              }
+
+                void _showDeleteConfirmationDialog(
+                    BuildContext context, int receiptId) {
+                  showDialog(
+                    context: context,
+                    builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Row(
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: Colors.red,
+                              size: 24,
+                            ),
+                            SizedBox(width: 8),
+                            Text('Удалить чек?'),
+                          ],
+                        ),
+                        content: const Text(
+                          'Вы уверены, что хотите удалить этот чек? Это действие нельзя отменить.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                            },
+                            child: const Text('Отмена'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              // Отправляем событие удаления в BLoC
+                              context
+                                  .read<ReceiptBloc>()
+                                  .add(DeleteReceipt(receiptId: receiptId));
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: const Text('Удалить'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                }
+}
             },
             icon: const Icon(Icons.add_a_photo),
             label: const Text('Добавить чек'),
@@ -585,14 +635,32 @@ class _ReceiptScreenState extends State<ReceiptScreen>
                         crossAxisAlignment: CrossAxisAlignment.end,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            '$totalSum ₽',
-                            style: GoogleFonts.inter(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryGreen,
-                            ),
-                            overflow: TextOverflow.ellipsis,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '$totalSum ₽',
+                                style: GoogleFonts.inter(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primaryGreen,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                onPressed: () => _showDeleteConfirmationDialog(
+                                    context, receipt['id']),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                  size: 20,
+                                ),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                tooltip: 'Удалить чек',
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 4),
                           Container(
@@ -657,6 +725,52 @@ class _ReceiptScreenState extends State<ReceiptScreen>
           ),
         ),
       ),
+    );
+  }
+
+  void _showDeleteConfirmationDialog(BuildContext context, int receiptId) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.red,
+                size: 24,
+              ),
+              SizedBox(width: 8),
+              Text('Удалить чек?'),
+            ],
+          ),
+          content: const Text(
+            'Вы уверены, что хотите удалить этот чек? Это действие нельзя отменить.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Отмена'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Отправляем событие удаления в BLoC
+                context
+                    .read<ReceiptBloc>()
+                    .add(DeleteReceipt(receiptId: receiptId));
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Удалить'),
+            ),
+          ],
+        );
+      },
     );
   }
 }

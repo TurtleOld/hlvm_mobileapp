@@ -23,6 +23,8 @@ class ErrorHandler {
           return data?.toString() ?? AppConstants.unknownError;
         case 404:
           return 'Ресурс не найден';
+        case 429:
+          return handleRateLimitError(error.response?.data);
         case 500:
           return 'Ошибка сервера';
         default:
@@ -182,5 +184,49 @@ class ErrorHandler {
         ),
       ),
     );
+  }
+
+  /// Обрабатывает ошибки rate limit с детальной информацией
+  static String handleRateLimitError(dynamic responseData) {
+    if (responseData is Map<String, dynamic>) {
+      // Проверяем структуру ошибки: {'error': {'code': 'RateLimitReached', 'message': '...', 'details': '...'}}
+      if (responseData.containsKey('error') && responseData['error'] is Map) {
+        final errorData = responseData['error'] as Map;
+
+        if (errorData['code'] == 'RateLimitReached') {
+          final message = errorData['message']?.toString() ?? '';
+          final details = errorData['details']?.toString() ?? '';
+
+          // Извлекаем время ожидания из сообщения
+          final waitTimeMatch =
+              RegExp(r'Please wait (\d+) seconds').firstMatch(message);
+          if (waitTimeMatch != null) {
+            final waitSeconds =
+                int.tryParse(waitTimeMatch.group(1) ?? '0') ?? 0;
+            final waitMinutes = (waitSeconds / 60).ceil();
+
+            if (waitMinutes > 0) {
+              return '${AppConstants.rateLimitExceeded}. ${AppConstants.rateLimitWaitMessage} ${waitMinutes} минут';
+            } else {
+              return '${AppConstants.rateLimitExceeded}. ${AppConstants.rateLimitWaitMessage} ${waitSeconds} секунд';
+            }
+          }
+
+          // Если не удалось извлечь время, возвращаем детали
+          return details.isNotEmpty ? details : message;
+        }
+      }
+
+      // Альтернативная структура ошибки
+      if (responseData.containsKey('message')) {
+        return responseData['message'].toString();
+      }
+
+      if (responseData.containsKey('detail')) {
+        return responseData['detail'].toString();
+      }
+    }
+
+    return AppConstants.rateLimitExceeded;
   }
 }

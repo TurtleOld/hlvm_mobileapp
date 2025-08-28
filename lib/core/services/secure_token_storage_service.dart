@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Сервис для безопасного хранения токенов аутентификации
-/// Использует Flutter Secure Storage
 class SecureTokenStorageService {
   static const String _accessTokenKey = 'access_token';
   static const String _refreshTokenKey = 'refresh_token';
@@ -18,7 +16,6 @@ class SecureTokenStorageService {
     FlutterSecureStorage? secureStorage,
   }) : _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
-  /// Сохраняет токен доступа
   Future<void> storeAccessToken(String token, {Duration? expiry}) async {
     try {
       await _secureStorage.write(
@@ -26,7 +23,6 @@ class SecureTokenStorageService {
         value: token,
       );
 
-      // Сохраняем время истечения токена
       if (expiry != null) {
         final expiryTime = DateTime.now().add(expiry);
         await _secureStorage.write(
@@ -35,20 +31,17 @@ class SecureTokenStorageService {
         );
       }
 
-      // Генерируем уникальный ID сессии
       await _generateSessionId();
     } catch (e) {
       throw Exception('Не удалось сохранить токен доступа: $e');
     }
   }
 
-  /// Получает токен доступа
   Future<String?> getAccessToken() async {
     try {
       final token = await _secureStorage.read(key: _accessTokenKey);
       if (token == null) return null;
 
-      // Проверяем, не истек ли токен
       if (await _isTokenExpired()) {
         await clearTokens();
         return null;
@@ -56,13 +49,11 @@ class SecureTokenStorageService {
 
       return token;
     } catch (e) {
-      // При ошибке очищаем токены
       await clearTokens();
       return null;
     }
   }
 
-  /// Сохраняет refresh токен
   Future<void> storeRefreshToken(String token) async {
     try {
       await _secureStorage.write(
@@ -74,7 +65,6 @@ class SecureTokenStorageService {
     }
   }
 
-  /// Получает refresh токен
   Future<String?> getRefreshToken() async {
     try {
       final token = await _secureStorage.read(key: _refreshTokenKey);
@@ -86,7 +76,6 @@ class SecureTokenStorageService {
     }
   }
 
-  /// Сохраняет данные пользователя
   Future<void> storeUserData(Map<String, dynamic> userData) async {
     try {
       final jsonData = jsonEncode(userData);
@@ -99,7 +88,6 @@ class SecureTokenStorageService {
     }
   }
 
-  /// Получает данные пользователя
   Future<Map<String, dynamic>?> getUserData() async {
     try {
       final jsonData = await _secureStorage.read(key: _userDataKey);
@@ -111,7 +99,6 @@ class SecureTokenStorageService {
     }
   }
 
-  /// Проверяет, истек ли токен
   Future<bool> _isTokenExpired() async {
     try {
       final expiryString = await _secureStorage.read(key: _tokenExpiryKey);
@@ -120,11 +107,10 @@ class SecureTokenStorageService {
       final expiryTime = DateTime.parse(expiryString);
       return DateTime.now().isAfter(expiryTime);
     } catch (e) {
-      return true; // При ошибке считаем токен истекшим
+      return true;
     }
   }
 
-  /// Проверяет, есть ли действительный токен
   Future<bool> hasValidToken() async {
     try {
       final token = await getAccessToken();
@@ -134,7 +120,6 @@ class SecureTokenStorageService {
     }
   }
 
-  /// Обновляет токены
   Future<void> updateTokens({
     required String accessToken,
     String? refreshToken,
@@ -146,14 +131,12 @@ class SecureTokenStorageService {
         await storeRefreshToken(refreshToken);
       }
 
-      // Обновляем ID сессии
       await _generateSessionId();
     } catch (e) {
       throw Exception('Не удалось обновить токены: $e');
     }
   }
 
-  /// Генерирует уникальный ID сессии
   Future<void> _generateSessionId() async {
     try {
       final random = Random.secure();
@@ -166,11 +149,9 @@ class SecureTokenStorageService {
         value: sessionId,
       );
     } catch (e) {
-      // Игнорируем ошибки генерации ID сессии
     }
   }
 
-  /// Получает ID текущей сессии
   Future<String?> getSessionId() async {
     try {
       return await _secureStorage.read(key: _sessionIdKey);
@@ -179,7 +160,6 @@ class SecureTokenStorageService {
     }
   }
 
-  /// Сохраняет GitHub токен
   Future<void> storeGithubToken(String token) async {
     try {
       await _secureStorage.write(
@@ -191,7 +171,6 @@ class SecureTokenStorageService {
     }
   }
 
-  /// Получает GitHub токен
   Future<String?> getGithubToken() async {
     try {
       return await _secureStorage.read(key: _githubTokenKey);
@@ -200,16 +179,13 @@ class SecureTokenStorageService {
     }
   }
 
-  /// Удаляет GitHub токен
   Future<void> removeGithubToken() async {
     try {
       await _secureStorage.delete(key: _githubTokenKey);
     } catch (e) {
-      // Игнорируем ошибки при удалении
     }
   }
 
-  /// Очищает все токены и данные сессии
   Future<void> clearTokens() async {
     try {
       await _secureStorage.delete(key: _accessTokenKey);
@@ -217,13 +193,10 @@ class SecureTokenStorageService {
       await _secureStorage.delete(key: _tokenExpiryKey);
       await _secureStorage.delete(key: _userDataKey);
       await _secureStorage.delete(key: _sessionIdKey);
-      // НЕ удаляем GitHub токен при очистке, так как он не связан с сессией
     } catch (e) {
-      // Игнорируем ошибки очистки
     }
   }
 
-  /// Получает информацию о токенах (для отладки)
   Future<Map<String, dynamic>> getTokenInfo() async {
     try {
       final hasAccessToken = await getAccessToken() != null;
@@ -249,20 +222,17 @@ class SecureTokenStorageService {
     }
   }
 
-  /// Проверяет целостность сохраненных данных
   Future<bool> validateStoredData() async {
     try {
       final accessToken = await getAccessToken();
       final sessionId = await getSessionId();
 
-      // Проверяем, что хотя бы основные данные доступны
       return accessToken != null && sessionId != null;
     } catch (e) {
       return false;
     }
   }
 
-  /// Создает резервную копию токенов (для миграции)
   Future<Map<String, String>> createBackup() async {
     try {
       final backup = <String, String>{};
@@ -288,13 +258,10 @@ class SecureTokenStorageService {
     }
   }
 
-  /// Восстанавливает токены из резервной копии
   Future<void> restoreFromBackup(Map<String, String> backup) async {
     try {
-      // Очищаем текущие данные
       await clearTokens();
 
-      // Восстанавливаем токены
       if (backup.containsKey('access_token')) {
         await storeAccessToken(backup['access_token']!);
       }
@@ -309,7 +276,6 @@ class SecureTokenStorageService {
         await storeUserData(userData);
       }
 
-      // Генерируем новый ID сессии
       await _generateSessionId();
     } catch (e) {
       throw Exception('Не удалось восстановить из резервной копии: $e');

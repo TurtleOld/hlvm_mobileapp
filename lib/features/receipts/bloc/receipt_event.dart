@@ -37,3 +37,12 @@ class GetSellerInfo extends ReceiptEvent {
   @override
   List<Object?> get props => [sellerId];
 }
+
+class DeleteReceipt extends ReceiptEvent {
+  final int receiptId;
+
+  const DeleteReceipt({required this.receiptId});
+
+  @override
+  List<Object?> get props => [receiptId];
+}

@@ -8,12 +8,10 @@ class AppStartupService {
   AppStartupService({required CacheService cacheService})
       : _cacheService = cacheService;
 
-  /// Инициализирует приложение при запуске
   Future<void> initializeApp() async {
     try {
       _talker.log('Starting app initialization...');
 
-      // Инициализируем кеш
       await _initializeCache();
 
       _talker.log('App initialization completed successfully');
@@ -22,17 +20,14 @@ class AppStartupService {
     }
   }
 
-  /// Инициализирует кеш при запуске
   Future<void> _initializeCache() async {
     try {
       _talker.log('Initializing cache...');
 
-      // Получаем информацию о текущем состоянии кеша
       final cacheInfo = await _cacheService.getCacheInfo();
       _talker.log(
           'Cache info: ${cacheInfo['size_mb']} MB used, max: ${cacheInfo['max_size_mb']} MB');
 
-      // Проверяем, есть ли кешированные данные
       final hasCachedReceipts = await _cacheService.hasCachedReceipts();
       if (hasCachedReceipts) {
         _talker.log('Found cached receipts data');
@@ -46,7 +41,6 @@ class AppStartupService {
     }
   }
 
-  /// Очищает весь кеш
   Future<void> clearAllCache() async {
     try {
       _talker.log('Clearing all cache...');
@@ -57,7 +51,6 @@ class AppStartupService {
     }
   }
 
-  /// Получает информацию о кеше
   Future<Map<String, dynamic>> getCacheInfo() async {
     try {
       return await _cacheService.getCacheInfo();
